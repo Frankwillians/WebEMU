@@ -229,10 +229,15 @@
 <!-- SERVER PANEL -->
 <section id="server-panel" class="panel hidden">
   <div class="row">
-    <input id="server-input" class="input" type="text" placeholder="http://192.168.0.5:3000" spellcheck="false" />
+    <input id="server-input" class="input" type="text" placeholder="https://seu-tunel.trycloudflare.com  ou  http://192.168.0.5:3000" spellcheck="false" />
     <button id="btn-connect" class="btn sm primary" type="button">Conectar</button>
+    <button id="btn-paste-server" class="btn sm" type="button" title="Colar da área de transferência e conectar">📋 Colar</button>
   </div>
   <p class="hint" id="server-status">Usando o servidor desta página.</p>
+  <div class="row" style="margin-top:8px">
+    <button id="btn-invite" class="btn sm" type="button">🔗 Copiar link de acesso</button>
+    <span class="hint" id="invite-status" style="margin:0"></span>
+  </div>
   <p class="hint">De outro aparelho: <span id="lan-url" class="lan-url">—</span></p>
 
   <div class="row" style="margin-top:12px">
@@ -249,11 +254,21 @@
       Quem varre a sua rede é o <b>servidor</b>, nunca o navegador (os navegadores bloqueiam isso por segurança). Ao abrir este site pelo endereço do Vercel, a varredura roda no datacenter da Vercel — que <b>não está na sua casa</b>, então nunca encontra seus PCs.</p>
 
       <p class="hint"><b>A solução — um endereço HTTPS para o PC que tem os jogos:</b></p>
+      <table class="hint" style="width:100%;border-collapse:collapse;margin:6px 0">
+        <tr style="color:#67e8f9"><td style="padding:3px 6px"><b>Serviço</b></td><td style="padding:3px 6px"><b>Como faz</b></td><td style="padding:3px 6px"><b>Endereço</b></td></tr>
+        <tr><td style="padding:3px 6px">⭐ <b>Cloudflare</b> (mais fácil)</td><td style="padding:3px 6px"><code>winget install Cloudflare.cloudflared</code> depois <code>cloudflared tunnel --url http://localhost:3000</code></td><td style="padding:3px 6px">HTTPS grátis, sem conta</td></tr>
+        <tr><td style="padding:3px 6px">🔒 <b>Tailscale</b> (mais seguro)</td><td style="padding:3px 6px">instala nos dois PCs, entra na mesma rede, depois <code>tailscale serve https / http://localhost:3000</code></td><td style="padding:3px 6px"><code>https://nomedopc.tailnet.ts.net</code> — <b>fixo</b></td></tr>
+        <tr><td style="padding:3px 6px">🎮 <b>Playit.gg</b></td><td style="padding:3px 6px">instala e roda um agente</td><td style="padding:3px 6px">endereço grátis próprio</td></tr>
+        <tr><td style="padding:3px 6px"><b>ngrok</b></td><td style="padding:3px 6px"><code>ngrok http 3000</code></td><td style="padding:3px 6px">HTTPS grátis (conta)</td></tr>
+      </table>
+
+      <p class="hint"><b>Passo a passo com o Cloudflare (recomendado):</b></p>
       <ol class="hint" style="padding-left:18px;margin:6px 0">
         <li>No PC com os jogos, rode: <code>node src/backend/server.js</code></li>
         <li>Em outra janela do PowerShell, rode: <code>cloudflared tunnel --url http://localhost:3000</code></li>
         <li>Ele imprime um endereço tipo <code>https://abc-123.trycloudflare.com</code></li>
-        <li><b>Todo mundo abre esse endereço</b> (<code>https://abc-123.trycloudflare.com/play.html</code>)</li>
+        <li>Clique em <b>🔗 Copiar link de acesso</b> acima — o link já vem com <code>?server=</code> pronto</li>
+        <li><b>Todo mundo abre esse link</b> e conecta sozinho (celular ou PC)</li>
       </ol>
 
       <p class="hint">Abrindo por esse endereço, <b>tudo passa a funcionar junto</b>, inclusive com amigos de outras casas:</p>
@@ -624,6 +639,57 @@
     st.innerHTML = backendOk
       ? '<span class="ok">●</span> Conectado a <b>' + escapeHtml(serverLabel()) + '</b>'
       : '<span class="err">●</span> Sem conexão com <b>' + escapeHtml(serverLabel()) + '</b>';
+  }
+
+  // Conecta a um servidor informado (túnel HTTPS ou IP da LAN) e recarrega os
+  // consoles/jogos. Usado pelos botões Conectar, Colar e pelo auto-connect.
+  function connectToServer(v) {
+    setApiBase(v);
+    updateServerStatus();
+    if (el('server-status')) el('server-status').innerHTML = '<span class="ok">●</span> Conectando a <b>' + escapeHtml(v || '…') + '</b>…';
+    return checkBackend()
+      .then(function () { return loadSystems(); })
+      .then(function () {
+        refreshBiosUI();
+        toast('Conectado a <b>' + escapeHtml(serverLabel()) + '</b>', 'info');
+        el('server-panel').classList.add('hidden');
+      })
+      .catch(function (e) {
+        toast('Não foi possível conectar em <b>' + escapeHtml(v) + '</b>.<br>Confira se o endereço está certo e se o PC do host está ligado.', 'err');
+        throw e;
+      });
+  }
+
+  // Copia um texto para a área de transferência (com fallback para navegadores
+  // antigos / mobile) e mostra o resultado num status ao lado do botão.
+  function copiarTexto(texto, msgOk, btnId, statusId) {
+    var st = statusId ? el(statusId) : null;
+    function ok() {
+      if (st) st.textContent = '✅ copiado!';
+      if (btnId && el(btnId)) { var b = el(btnId); var t = b.textContent; b.textContent = '✅ Copiado'; setTimeout(function () { b.textContent = t; }, 1600); }
+      if (window.toast) toast(msgOk || 'Copiado!', 'ok');
+    }
+    function falhou() { if (st) st.textContent = '⚠️ copie manualmente'; }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(texto).then(ok).catch(function () {
+        // fallback: seleciona um input temporário
+        var ta = document.createElement('textarea');
+        ta.value = texto; ta.style.position = 'fixed'; ta.style.opacity = '0';
+        document.body.appendChild(ta); ta.select();
+        var done = false;
+        try { done = document.execCommand('copy'); } catch (e) {}
+        document.body.removeChild(ta);
+        done ? ok() : falhou();
+      });
+    } else {
+      var ta = document.createElement('textarea');
+      ta.value = texto; ta.style.position = 'fixed'; ta.style.opacity = '0';
+      document.body.appendChild(ta); ta.select();
+      var done = false;
+      try { done = document.execCommand('copy'); } catch (e) {}
+      document.body.removeChild(ta);
+      done ? ok() : falhou();
+    }
   }
 
   // ---------------------------------------------------------------- systems
@@ -1491,6 +1557,10 @@
     var base = getApiBase() || serverPublicUrl || serverLanUrl || (IS_FILE ? 'http://localhost:3000' : location.origin);
     var url = String(base).replace(/\/+$/, '') + '/play.html?room=' + encodeURIComponent(code);
     if (accessToken) url += '&token=' + encodeURIComponent(accessToken);
+    // Inclui o servidor para o convidado conectar automaticamente (1 clique),
+    // mesmo que ele abra este link pelo site do Vercel.
+    var srv = getApiBase();
+    if (srv && srv !== location.origin) url += '&server=' + encodeURIComponent(srv);
     return url;
   }
 
@@ -2124,8 +2194,52 @@
       el('server-panel').classList.toggle('hidden');
       el('server-input').value = getApiBase();
     });
-    el('btn-connect').addEventListener('click', function () { setApiBase(el('server-input').value.trim()); checkBackend().then(loadSystems).then(refreshBiosUI).catch(function () {}); });
+    el('btn-connect').addEventListener('click', function () {
+      var v = el('server-input').value.trim();
+      setApiBase(v);
+      connectToServer(v);
+    });
     el('server-input').addEventListener('keydown', function (e) { if (e.key === 'Enter') el('btn-connect').click(); });
+
+    // 📋 Colar: lê a área de transferência, conecta e avisa o resultado.
+    // Funciona no PC e no celular (o celular pede permissão de colar).
+    el('btn-paste-server').addEventListener('click', function () {
+      function conectar(texto) {
+        var v = String(texto || '').trim().replace(/\/+$/, '');
+        if (!v) { toast('Área de transferência vazia.', 'warn'); return; }
+        // aceita link completo com ?server=... e extrai só a base
+        try {
+          var m = v.match(/[?&]server=([^&]+)/);
+          if (m) v = decodeURIComponent(m[1]).replace(/\/+$/, '');
+        } catch (e) {}
+        if (!/^https?:\/\//i.test(v)) { toast('Cole um endereço http:// ou https://', 'warn'); return; }
+        el('server-input').value = v;
+        setApiBase(v);
+        connectToServer(v);
+      }
+      if (navigator.clipboard && navigator.clipboard.readText) {
+        navigator.clipboard.readText().then(conectar).catch(function () {
+          toast('Não foi possível ler a área de transferência. Cole no campo e clique em Conectar.', 'warn');
+          el('server-input').focus();
+        });
+      } else {
+        toast('Seu navegador não permite colar automaticamente. Cole no campo e clique em Conectar.', 'warn');
+        el('server-input').focus();
+      }
+    });
+
+    // 🔗 Copiar link de acesso: gera um link único que já conecta no servidor
+    // atual (e na sala, se estiver numa). Funciona em qualquer aparelho.
+    el('btn-invite').addEventListener('click', function () {
+      var base = getApiBase();
+      var url = location.origin + '/play.html';
+      var params = [];
+      if (base && base !== location.origin) params.push('server=' + encodeURIComponent(base));
+      if (accessToken) params.push('token=' + encodeURIComponent(accessToken));
+      if (NP.roomId) params.push('room=' + encodeURIComponent(NP.roomId));
+      if (params.length) url += '?' + params.join('&');
+      copiarTexto(url, 'Link copiado! Envie para o amigo abrir em qualquer aparelho.', 'btn-invite', 'invite-status');
+    });
 
     // Descoberta de servidores na rede
     el('btn-discover').addEventListener('click', runDiscovery);
@@ -2249,6 +2363,14 @@
   document.addEventListener('DOMContentLoaded', function () {
     setupUI();
     updateServerStatus();
+
+    // ?server=URL → conecta automaticamente num backend remoto (túnel/servidor)
+    // e guarda a escolha. Assim UM link basta: o amigo abre no celular ou no PC
+    // e já cai no servidor certo — sem digitar nada.
+    try {
+      var srvParam = new URLSearchParams(location.search).get('server');
+      if (srvParam && /^https?:\/\//i.test(srvParam)) setApiBase(srvParam);
+    } catch (e) {}
 
     var roomParam = null;
     try { roomParam = new URLSearchParams(location.search).get('room'); } catch (e) {}
