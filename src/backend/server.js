@@ -993,7 +993,7 @@ const staticDir = existsSync(rootDist) ? rootDist : frontendDist;
 // COEP `require-corp`; as demais coisas da página são same-origin (capas via
 // proxy, ROMs, BIOS), que ficam liberadas por padrão.
 const playFilePath = resolve(__dirname, '../../frontend/public/play.html');
-app.get(['/play', '/play.html'], (req, res) => {
+app.get(['/', '/play', '/play.html'], (req, res) => {
   res.setHeader('Cross-Origin-Opener-Policy', 'same-origin');
   res.setHeader('Cross-Origin-Embedder-Policy', 'require-corp');
   res.setHeader('Cross-Origin-Resource-Policy', 'same-origin');
