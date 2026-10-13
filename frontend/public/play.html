@@ -222,6 +222,7 @@
     <span id="backend-badge" class="badge"><span class="dot"></span> Servidor…</span>
     <button id="btn-server-toggle" class="btn sm" type="button">🌐 Servidor</button>
     <button id="btn-lobby-toggle" class="btn sm" type="button">👥 Jogar em rede</button>
+    <button id="btn-np-stream" class="btn sm hidden" type="button" title="Abrir/parar a transmissão da sala">📡 Transmissão</button>
     <button id="btn-home" class="btn sm hidden" type="button">🏠 Consoles</button>
   </div>
 </header>
@@ -353,6 +354,7 @@
       <div class="row" style="gap:6px">
         <button id="btn-np-copy" class="btn sm" type="button">🔗 Copiar link</button>
         <button id="btn-np-games" class="btn sm" type="button">🏠 Consoles</button>
+        <button id="btn-np-stream-room" class="btn sm" type="button">📡 Transmissão</button>
         <button id="btn-np-leave" class="btn sm" type="button">🚪 Sair da sala</button>
       </div>
     </div>
@@ -1386,12 +1388,18 @@
   }
 
   function changeGame() {
-    if (NP.roomId) npLeave(false);
+    // Troca de jogo DENTRO da sala: não saímos. O emulador é derrubado e, ao
+    // carregar o novo jogo, npHostRecheckStream refaz a transmissão para todos.
+    if (NP.localStream) {
+      NP.localStream.getTracks().forEach(function (t) { try { t.stop(); } catch (e) {} });
+      NP.localStream = null;
+    }
     var session = readJSON(LS.session);
     if (session && session.source === 'idb' && session.keys) session.keys.forEach(function (k) { idbDel(k.key); });
     removeKey(LS.session);
     var sys = session && findSystem(session.system);
     el('game').innerHTML = '';
+    window.EJS_emulator = null;
     if (sys) openSystem(sys.id); else showHub();
   }
 
@@ -1652,13 +1660,29 @@
   }
 
   function npShareLink(code) {
-    var base = getApiBase() || serverPublicUrl || serverLanUrl || (IS_FILE ? 'http://localhost:3000' : location.origin);
+    var base, srv = getApiBase();
+
+    if (NP.wsMode === 'online') {
+      // Modo online: o convidado pode estar em QUALQUER lugar, então o link tem
+      // que ser o endereço publicado do site (o mesmo do sinalizador) — nunca o
+      // IP da máquina do host.
+      var host = null;
+      var wsUrl = NP.wsUrl || serverWsUrl;
+      if (wsUrl) { try { host = new URL(wsUrl).host; } catch (e) {} }
+      if (!host) host = location.host;
+      base = (location.protocol === 'https:' ? 'https://' : 'http://') + host;
+    } else {
+      // Modo LAN: o link do próprio PC/servidor (mesma rede).
+      base = getApiBase() || serverPublicUrl || serverLanUrl || (IS_FILE ? 'http://localhost:3000' : location.origin);
+    }
+
     var url = String(base).replace(/\/+$/, '') + '/play.html?room=' + encodeURIComponent(code);
     if (accessToken) url += '&token=' + encodeURIComponent(accessToken);
-    // Inclui o servidor + o modo do sinalizador para o convidado conectar
-    // automaticamente (1 clique), mesmo abrindo o link pelo site do Vercel.
-    var srv = getApiBase();
-    if (srv && srv !== location.origin) url += '&server=' + encodeURIComponent(srv);
+
+    // &server= só quando for útil (endereço alcançável pelo convidado)
+    if (NP.wsMode !== 'online' && srv && srv !== location.origin) {
+      url += '&server=' + encodeURIComponent(srv);
+    }
     if (NP.wsMode === 'online') {
       var ws = npWsUrl();
       if (ws) url += '&ws=' + encodeURIComponent(ws);
@@ -1978,6 +2002,7 @@
 
     var wasGuest = !NP.isHost && NP.roomId;
     NP.roomId = null; NP.isHost = false; NP.meta = null; NP.summary = null; NP.players = [];
+    npAtualizarBotaoStream();
 
     var v = el('np-video'); if (v) v.srcObject = null;
     hide(el('np-stage')); hide(el('np-pad')); hide(el('np-badge'));
@@ -2042,7 +2067,11 @@
     // "🏠 Consoles" disponível dentro da sala (sair/entrar em jogos sem sair da sala).
     show(el('btn-home'));
     if (el('np-code')) el('np-code').textContent = NP.roomId;
-    if (el('np-link')) el('np-link').innerHTML = 'Convide: <span class="lan-url">' + escapeHtml(npShareLink(NP.roomId)) + '</span>';
+    if (el('np-link')) {
+      var convite = npShareLink(NP.roomId);
+      el('np-link').innerHTML = 'Link do convite (' + (NP.wsMode === 'online' ? 'online' : 'rede local') +
+        '): <span class="lan-url">' + escapeHtml(convite) + '</span>';
+    }
 
     var list = el('np-players');
     if (list) {
@@ -2067,6 +2096,7 @@
     if (el('np-players-count')) {
       el('np-players-count').textContent = NP.players.length + ' de ' + ((NP.summary && NP.summary.maxPlayers) || 4);
     }
+    npAtualizarBotaoStream();
     updateNpBadge();
   }
 
@@ -2122,11 +2152,110 @@
       ? 'Transmitindo' + (npConnectedCount() ? ' · ' + npConnectedCount() + ' conectado(s)' : ' · aguardando jogadores')
       : 'Sala ' + NP.roomId + ' · jogador ' + (NP.myPlayerIndex + 1);
     if (el('np-badge-txt')) el('np-badge-txt').textContent = txt;
+    npAtualizarBotaoStream();
   }
 
   function npSetGuestChrome(on) {
     if (on) { hide(el('btn-restart')); hide(el('btn-change')); show(el('btn-np-exit')); }
     else { show(el('btn-restart')); show(el('btn-change')); hide(el('btn-np-exit')); }
+  }
+
+  // ------------------------------------------------------- 📡 TRANSMISSÃO ----
+  // Um único botão para: abrir a transmissão a qualquer momento (convidado vê o
+  // vídeo do host; host volta ao jogo que está transmitindo) e para PARAR de
+  // vez — inclusive se estiver rodando escondida ao fundo.
+  function npStreamRodando() {
+    if (NP.localStream) return true;                       // host capturando
+    for (var id in NP.peers) if (NP.peers[id] && NP.peers[id].connected) return true;
+    return !!(NP.remoteStream && NP.remoteStream.getTracks().length);
+  }
+
+  function npStreamVisivel() {
+    if (NP.isHost) {
+      var vp = el('view-player');
+      return !!vp && !vp.classList.contains('hidden');
+    }
+    var st = el('np-stage');
+    return !!st && !st.classList.contains('hidden');
+  }
+
+  function npAtualizarBotaoStream() {
+    var botoes = [el('btn-np-stream'), el('btn-np-stream-room')];
+    if (!NP.roomId) { botoes.forEach(function (b) { if (b) b.classList.add('hidden'); }); return; }
+    var rodando = npStreamRodando();
+    var rotulo = rodando ? '⏹️ Parar transmissão' : '📡 Ver transmissão';
+    var classe = 'btn sm ' + (rodando ? '' : 'primary');
+    var titulo = rodando
+      ? 'Parar a transmissão (nada continua rodando ao fundo)'
+      : 'Abrir a transmissão da sala';
+    botoes.forEach(function (b) {
+      if (!b) return;
+      b.classList.remove('hidden');
+      b.textContent = rotulo;
+      b.className = classe;
+      b.title = titulo;
+    });
+  }
+
+  // Host: volta à tela do jogo que está (ou estava) transmitindo.
+  function npMostrarJogoHost() {
+    if (!window.EJS_emulator) return false;
+    hide(el('view-hub')); hide(el('view-system'));
+    show(el('view-player')); show(el('btn-home'));
+    npBuildStage();
+    if (el('np-stage')) el('np-stage').classList.add('hidden'); // palco é do convidado
+    npSetGuestChrome(false);
+    updateNpBadge();
+    window.scrollTo(0, 0);
+    return true;
+  }
+
+  function npAbrirStream() {
+    if (NP.isHost) {
+      if (!npMostrarJogoHost()) {
+        toast('Você é o host e ainda não iniciou um jogo. Escolha em <b>🏠 Consoles</b>.', 'info');
+        showHub();
+        return;
+      }
+      // reenga-tofa/recomeça a captura e refaz a oferta para todos
+      npHostRecheckStream();
+    } else {
+      npShowGuest();
+    }
+    npAtualizarBotaoStream();
+  }
+
+  function npPararTransmissao() {
+    // Host: derruba a captura.
+    if (NP.localStream) {
+      NP.localStream.getTracks().forEach(function (t) { try { t.stop(); } catch (e) {} });
+      NP.localStream = null;
+    }
+    // Convidado: derruba o vídeo recebido.
+    if (NP.remoteStream) {
+      NP.remoteStream.getTracks().forEach(function (t) { try { t.stop(); } catch (e) {} });
+      NP.remoteStream = null;
+    }
+    var v = el('np-video');
+    if (v) { try { v.pause(); } catch (e) {} v.srcObject = null; }
+    // Fecha as conexões de mídia (o host pode reabrir depois pelo mesmo botão).
+    for (var id in NP.peers) {
+      var e = NP.peers[id];
+      if (e && e.pc) { try { e.pc.close(); } catch (err) {} }
+      if (e) { e.pc = null; e.dc = null; e.connected = false; e.retries = 0; }
+    }
+    if (el('np-stage')) el('np-stage').classList.add('hidden');
+    npRenderRoom();
+    npSetStatus('Transmissão parada.');
+    toast('Transmissão parada. Nada fica rodando ao fundo.', 'ok');
+    npAtualizarBotaoStream();
+  }
+
+  function npToggleStream() {
+    if (!NP.roomId) { toast('Entre numa sala para usar a transmissão.', 'warn'); return; }
+    // Se está visível e rodando → para. Se está rodando escondida → também para.
+    if (npStreamRodando()) { npPararTransmissao(); return; }
+    npAbrirStream();
   }
 
   function npShowGuest() {
@@ -2250,8 +2379,15 @@
     }
   }
 
-  function npHostStartStream() {
-    if (NP.localStream) return Promise.resolve(NP.localStream);
+  // Captura a tela do emulador para transmitir.
+  // force=true → joga fora a captura antiga e faz uma nova (usada quando o host
+  // troca de jogo: o canvas antigo já está morto e a trilha velha não serve mais).
+  function npHostStartStream(force) {
+    if (NP.localStream && !force) return Promise.resolve(NP.localStream);
+    if (NP.localStream) {
+      NP.localStream.getTracks().forEach(function (t) { try { t.stop(); } catch (e) {} });
+      NP.localStream = null;
+    }
     var emu = window.EJS_emulator;
     var canvas = (emu && emu.frontend && emu.frontend.canvas) || document.querySelector('#game canvas');
     if (!canvas || !canvas.captureStream) return Promise.reject(new Error('canvas do emulador indisponível'));
@@ -2272,26 +2408,30 @@
 
   // O host pode criar a sala ANTES de escolher o jogo. Quando o jogo enfim
   // carrega (o canvas do emulador passa a existir), começamos a transmitir para
-  // quem já está na sala — sem precisar sair e entrar de novo.
+  // quem já está na sala — e refazemos a oferta para quem já estava conectado,
+  // porque a trilha anterior ficou morta na troca de jogo.
   function npHostRecheckStream() {
     if (!NP.roomId || !NP.isHost) return;
-    setTimeout(function () {
+    var tentativas = 0;
+    var MAX = 40; // ~48s insistindo até o canvas do emulador aparecer
+    (function tentar() {
       if (!NP.roomId || !NP.isHost) return;
-      npHostStartStream()
-        .then(function () {
-          var pendentes = [];
-          for (var id in NP.peers) {
-            var e = NP.peers[id];
-            // só oferece para quem ainda não tem conexão em andamento/pronta
-            if (e && !e.pc) pendentes.push(id);
-          }
-          pendentes.forEach(function (id) { npHostCreateOffer(id); });
-          if (pendentes.length) {
-            npSetStatus('Transmitindo a partida para ' + Object.keys(NP.peers).length + ' jogador(es).');
-          }
-        })
-        .catch(function () { /* canvas ainda não disponível — tenta de novo depois */ });
-    }, 2500);
+      if (tentativas >= MAX) { npSetStatus('Não foi possível capturar a tela do jogo.'); return; }
+      tentativas++;
+      if (tentativas > 1) { setTimeout(tentar, 1200); return; }
+      avancar();
+    })();
+    function avancar() {
+      if (!NP.roomId || !NP.isHost) return;
+      npHostStartStream(true).then(function () {
+        var ids = Object.keys(NP.peers);
+        if (!ids.length) return;
+        ids.forEach(function (id) {
+          if (NP.peers[id]) npHostCreateOffer(id);
+        });
+        npSetStatus('Transmitindo a partida para ' + ids.length + ' jogador(es).');
+      }).catch(function () { tentativas--; setTimeout(tentar, 1200); });
+    }
   }
 
   function npCreatePC(peerId, isHost) {
@@ -2503,6 +2643,9 @@
     // 🏠 Consoles (dentro da sala): volta ao seletor SEM sair da sala.
     el('btn-np-games').addEventListener('click', function () { el('btn-home').click(); });
     el('btn-np-exit').addEventListener('click', function () { npLeave(false); });
+    // 📡 Transmissão: abre/fecha a qualquer momento (cabeçalho e dentro da sala).
+    el('btn-np-stream').addEventListener('click', npToggleStream);
+    el('btn-np-stream-room').addEventListener('click', npToggleStream);
     el('btn-np-copy').addEventListener('click', npCopyLink);
     el('btn-np-invite').addEventListener('click', npCopyInvite);
 
