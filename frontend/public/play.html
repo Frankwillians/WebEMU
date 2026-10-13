@@ -495,6 +495,7 @@
     <span id="np-badge" class="badge hidden"><span class="dot"></span> <span id="np-badge-txt">—</span></span>
     <div class="spacer" style="flex:1"></div>
     <button id="btn-restart" class="btn sm" type="button">🔁 Reiniciar</button>
+    <button id="btn-stop" class="btn sm" type="button" title="Para o jogo e volta aos consoles">⏹️ Parar</button>
     <button id="btn-fullscreen" class="btn sm" type="button">⛶ Tela cheia</button>
     <button id="btn-change" class="btn sm" type="button">⬅ Trocar jogo</button>
     <button id="btn-np-exit" class="btn sm hidden" type="button">🚪 Sair da sala</button>
@@ -1714,8 +1715,11 @@
         npLeave(true);
         break;
       case 'room-closed':
-        toast('O host encerrou a sala.', 'warn');
+        toast('A sala foi encerrada.', 'warn');
         npLeave(true);
+        break;
+      case 'host-changed':
+        npOnHostChanged(p);
         break;
       case 'error':
         if (NP.pendingJoin && /senha/i.test(p.message || '')) {
@@ -1734,7 +1738,10 @@
 
   function npOnPeerList(p) {
     NP.myId = p.yourId;
+    var eraHost = NP.isHost;
     NP.myPlayerIndex = p.yourPlayerIndex || 0;
+    // Quem é jogador 1 (índice 0) é o host — o servidor pode ter passado a vez.
+    NP.isHost = NP.myPlayerIndex === 0;
     if (p.metadata) NP.meta = p.metadata;
     if (p.room) NP.summary = p.room;
     NP.roomId = (p.room && p.room.roomId) || NP.roomId;
@@ -1746,6 +1753,11 @@
     NP.pendingJoin = null;
     npRenderRoom();
     if (!NP.isHost) npShowGuest();
+    if (NP.isHost && !eraHost) {
+      npAppendChat('', '👑 Você agora é o host da sala ' + NP.roomId + '.', false, true);
+      toast('👑 Você agora é o <b>host</b> da sala. Escolha um jogo para transmitir.', 'info', 9000);
+      npHostRecheckStream();
+    }
     npAppendChat('', 'Você entrou na sala ' + NP.roomId + '.', false, true);
   }
 
@@ -1773,7 +1785,40 @@
     delete NP.peers[p.id];
     NP.players = NP.players.filter(function (x) { return x.id !== p.id; });
     npRenderRoom();
-    if (p.wasHost) { toast('O host saiu da sala.', 'warn'); npLeave(true); }
+    if (p.wasHost && p.id !== NP.myId) {
+      // O host saiu, mas a sala CONTINUA: o servidor passa a vez para outro
+      // jogador e avisa por 'host-changed' (tratado em npOnHostChanged).
+      npAppendChat('', 'O host saiu da sala. Passando a vez…', false, true);
+    }
+  }
+
+  // O host saiu (ou foi kickado): o servidor elegeu um novo host na sala.
+  function npOnHostChanged(p) {
+    if (!p || !NP.roomId) return;
+    var euSouOHost = !!NP.myId && p.hostId === NP.myId;
+
+    // Reorganiza a lista: o novo host sempre como jogador 1.
+    NP.players.forEach(function (pl) {
+      if (pl.id === p.hostId) pl.playerIndex = 0;
+    });
+    NP.players = NP.players.filter(function (pl) { return pl.id !== p.hostId; });
+    NP.players.unshift({ id: p.hostId, playerIndex: 0, name: p.hostName || 'Host' });
+    NP.players.sort(function (a, b) { return a.playerIndex - b.playerIndex; });
+
+    if (euSouOHost) {
+      NP.isHost = true;
+      NP.myPlayerIndex = 0;
+      npAppendChat('', '👑 Você agora é o host da sala ' + NP.roomId + '.', false, true);
+      toast('👑 Você agora é o <b>host</b> da sala ' + escapeHtml(NP.roomId) +
+        '.<br>Escolha um jogo — a partida aparece para todos.', 'info', 9000);
+      npSetStatus('Você é o host · escolha um jogo para transmitir');
+      // Se já houver um jogo carregado neste aparelho, começa a transmitir.
+      npHostRecheckStream();
+    } else {
+      NP.isHost = false;
+      npAppendChat('', '👑 ' + (p.hostName || 'Outro jogador') + ' agora é o host da sala.', false, true);
+    }
+    npRenderRoom();
   }
 
   // -------------------------------------------------------------- entrar/sair
@@ -1875,9 +1920,52 @@
     });
   }
 
+  // Derruba o EmulatorJS: limpa o canvas/áudio e as trilhas capturadas. Sem
+  // isso o núcleo (WASM) continua rodando ao fundo depois de sair da sala e só
+  // para quando a página é recarregada.
+  function npDestroyEmulator() {
+    try {
+      var emu = window.EJS_emulator;
+      if (emu) {
+        try { if (typeof emu.pause === 'function') emu.pause(); } catch (e) {}
+        try {
+          var f = emu.gameManager && emu.gameManager.functions;
+          if (f) {
+            if (f.unloadGame) f.unloadGame();
+            else if (f.loadGame) f.loadGame('');
+            if (f.pause) f.pause(1);
+          }
+        } catch (e) {}
+        try { if (typeof emu.onExit === 'function') emu.onExit(); } catch (e) {}
+      }
+    } catch (e) {}
+
+    // Só depois de remover os nós do emulador o worker/núcleo perde a
+    // referência e o navegador libera a CPU.
+    var g = el('game');
+    if (g) g.innerHTML = '';
+    window.EJS_emulator = null;
+    window.EJS_startOnLoaded = undefined;
+
+    if (NP.localStream) {
+      NP.localStream.getTracks().forEach(function (t) { try { t.stop(); } catch (err) {} });
+      NP.localStream = null;
+    }
+  }
+
+  // "⏹️ Parar": derruba o jogo e volta aos consoles. Se estiver numa sala, a
+  // sala continua aberta (o transmisso reinicia quando outro jogo carregar).
+  function npStopGame() {
+    npDestroyEmulator();
+    showHub();
+    npSetStatus(NP.roomId ? 'Jogo parado · sala ' + NP.roomId + ' continua aberta' : 'Jogo parado');
+  }
+
   function npLeave(fromRemote) {
     NP.leaving = true;
     if (!fromRemote) npSend({ type: 'leave' });
+    // Saiu da sala → o jogo para de verdade (nada fica rodando ao fundo).
+    npDestroyEmulator();
     for (var id in NP.peers) {
       var e = NP.peers[id];
       if (e && e.pc) { try { e.pc.close(); } catch (err) {} }
@@ -2545,6 +2633,10 @@
 
     el('btn-change').addEventListener('click', changeGame);
     el('btn-restart').addEventListener('click', function () { location.reload(); });
+    el('btn-stop').addEventListener('click', function () {
+      npStopGame();
+      toast('Jogo parado. Nada fica rodando ao fundo.', 'ok');
+    });
     el('btn-fullscreen').addEventListener('click', function () {
       var wrap = document.querySelector('.game-wrap');
       if (document.fullscreenElement) document.exitFullscreen();

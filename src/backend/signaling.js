@@ -31,6 +31,7 @@ const MessageType = {
   ROOM_LIST: 'room-list',
   ROOM_UPDATE: 'room-update',
   ROOM_CLOSED: 'room-closed',
+  HOST_CHANGED: 'host-changed',
   CHAT: 'chat',
   KICK: 'kick',
   KICKED: 'kicked'
@@ -49,6 +50,38 @@ function now() { return Date.now(); }
 function metaPublic(room) {
   const { password, ...rest } = room.meta;
   return { ...rest, hasPassword: !!password };
+}
+
+/** Lista dos peers da sala exceto um (para montar a peer-list de cada um) */
+function peersExcept(room, peerId) {
+  const peers = [];
+  for (const [id, p] of room.peers) {
+    if (id === peerId) continue;
+    peers.push({
+      id: p.id,
+      playerIndex: p.playerIndex,
+      ready: p.ready,
+      name: p.metadata.name,
+      metadata: p.metadata
+    });
+  }
+  return peers;
+}
+
+/** (Re)envia a peer-list a TODOS da sala — usado quando o host muda */
+function broadcastPeerList(room) {
+  for (const [id, peer] of room.peers) {
+    send(peer.ws, {
+      type: MessageType.PEER_LIST,
+      payload: {
+        peers: peersExcept(room, id),
+        yourId: id,
+        yourPlayerIndex: peer.playerIndex,
+        metadata: metaPublic(room),
+        room: roomSummary(room)
+      }
+    });
+  }
 }
 
 function roomSummary(room) {
@@ -128,8 +161,31 @@ function removePeer(room, peer) {
     rooms.delete(room.id);
     console.log(`[SIGNALING] Sala ${room.id} removida (vazia)`);
   } else if (wasHost) {
-    // Sem host não há jogo: avisa e libera a sala.
-    broadcastRoom(room, { type: MessageType.ROOM_CLOSED, payload: { roomId: room.id, reason: 'host-left' } });
+    // O host saiu: a sala NÃO acaba — passa a vez para outro jogador
+    // (o de menor playerIndex, ou seja, quem entrou antes).
+    const restantes = [...room.peers.values()].sort((a, b) => a.playerIndex - b.playerIndex);
+    const novoHost = restantes[0] || null;
+    if (novoHost) {
+      novoHost.playerIndex = 0;
+      // Os metadados da sala passam a ser do novo host.
+      room.meta.host = (novoHost.metadata && novoHost.metadata.name) || `Jogador 1`;
+      room.meta.updatedAt = now();
+      console.log(`[SIGNALING] Sala ${room.id}: host agora é ${novoHost.id} (${room.meta.host})`);
+    }
+    // Todo mundo recebe a lista nova (com o novo host como jogador 1) e o aviso.
+    broadcastPeerList(room);
+    broadcastRoom(room, {
+      type: MessageType.HOST_CHANGED,
+      payload: {
+        roomId: room.id,
+        hostId: novoHost ? novoHost.id : null,
+        hostName: room.meta.host
+      }
+    });
+    broadcastRoom(room, {
+      type: MessageType.ROOM_UPDATE,
+      payload: { metadata: metaPublic(room), summary: roomSummary(room) }
+    });
   }
 
   broadcastLobby();
@@ -302,17 +358,7 @@ export function attachSignaling(wss) {
         if (payload.password !== undefined) room.meta.password = String(payload.password || '');
       }
 
-      const peers = [];
-      for (const [id, p] of room.peers) {
-        if (id === peerId) continue;
-        peers.push({
-          id: p.id,
-          playerIndex: p.playerIndex,
-          ready: p.ready,
-          name: p.metadata.name,
-          metadata: p.metadata
-        });
-      }
+      const peers = peersExcept(room, peerId);
 
       send(ws, {
         type: MessageType.PEER_LIST,
