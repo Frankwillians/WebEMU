@@ -227,18 +227,17 @@
   </div>
 </header>
 
-<!-- SERVER PANEL -->
+<!-- SERVER PANEL: somente REDE LOCAL (achar PCs e carregar os jogos deles) -->
 <section id="server-panel" class="panel hidden">
-  <div class="row">
-    <input id="server-input" class="input" type="text" placeholder="https://seu-tunel.trycloudflare.com  ou  http://192.168.0.5:3000" spellcheck="false" />
+  <p class="hint">Serve para <b>acessar os jogos de outro PC na sua rede</b> (mesmo Wi-Fi/Ethernet).
+  Para jogar com amigos em <b>outras casas</b>, use <b>👥 Jogar em rede</b>.</p>
+
+  <div class="row" style="margin-top:8px">
+    <input id="server-input" class="input" type="text" placeholder="http://192.168.0.5:3000" spellcheck="false" />
     <button id="btn-connect" class="btn sm primary" type="button">Conectar</button>
     <button id="btn-paste-server" class="btn sm" type="button" title="Colar da área de transferência e conectar">📋 Colar</button>
   </div>
   <p class="hint" id="server-status">Usando o servidor desta página.</p>
-  <div class="row" style="margin-top:8px">
-    <button id="btn-invite" class="btn sm" type="button">🔗 Copiar link de acesso</button>
-    <span class="hint" id="invite-status" style="margin:0"></span>
-  </div>
   <p class="hint">De outro aparelho: <span id="lan-url" class="lan-url">—</span></p>
 
   <div class="row" style="margin-top:12px">
@@ -246,29 +245,8 @@
     <span class="hint" id="discover-status" style="margin:0"></span>
   </div>
   <div id="discover-list" class="list"></div>
-  <p class="hint">Procura outras instâncias do WebEMU na sua rede local (Wi-Fi/Ethernet) e mostra <strong>quais consoles e quantos jogos</strong> cada uma tem. Clique em <strong>Usar</strong> para jogar pelo servidor de outro PC.</p>
-
-  <details style="margin-top:12px;border:1px solid #223148;border-radius:10px;padding:8px 11px;background:#0e1624">
-    <summary style="cursor:pointer;font-weight:600;color:#67e8f9">🏠 Como usar os jogos de outro PC (mesma rede)</summary>
-    <div style="padding:8px 2px">
-      <p class="hint">Este painel serve <b>apenas para a sua rede local</b> (mesmo Wi-Fi/Ethernet). Ele faz duas coisas:</p>
-      <ul class="hint" style="padding-left:18px;margin:6px 0">
-        <li>🔍 <b>Buscar servidores na rede</b> — acha outros PCs com o WebEMU ligado na mesma rede e mostra <b>quais consoles e quantos jogos</b> cada um tem. Clique em <b>Usar</b> para jogar pelos arquivos daquele PC.</li>
-        <li>🌐 <b>Conectar pelo endereço</b> — digite <code>http://192.168.0.5:3000</code> (o IP do PC que tem os jogos) e clique em <b>Conectar</b>. Ou use <b>📋 Colar</b>.</li>
-      </ul>
-
-      <p class="hint"><b>Por que às vezes não acha nada?</b></p>
-      <ul class="hint" style="padding-left:18px;margin:6px 0">
-        <li>Os dois aparelhos precisam estar no <b>mesmo Wi-Fi</b> (alguns roteadores têm "isolamento de clientes" que bloqueia isso)</li>
-        <li>O PC com os jogos precisa estar com o <code>node src/backend/server.js</code> rodando</li>
-        <li>O <b>Firewall do Windows</b> pode estar bloqueando — libere o Node.js na rede privada</li>
-      </ul>
-
-      <p class="hint">💡 <b>Dica para o celular:</b> rode a busca e toque em <b>Usar</b>, ou escaneie/digite o IP mostrado acima. O endereço completo é <code>http://IP:3000/play.html</code>.</p>
-
-      <p class="hint">👉 <b>Quer jogar com amigos de outras casas (pela internet)?</b> Use a aba <b>👥 Jogar em rede</b> — é lá que ficam a criação de sala e o link de convite.</p>
-    </div>
-  </details>
+  <p class="hint">Acha outros computadores com o WebEMU ligado na mesma rede e mostra <strong>quais consoles e quantos jogos</strong> cada um tem. Clique em <strong>Usar</strong> para jogar pelos arquivos daquele PC.</p>
+  <p class="hint">Não achou nada? Confira se os dois aparelhos estão no <b>mesmo Wi-Fi</b>, se o outro PC está com o servidor rodando e se o <b>Firewall do Windows</b> não está bloqueando.</p>
 </section>
 
 <!-- NETPLAY / LOBBY PANEL -->
@@ -1404,17 +1382,6 @@
     npSetStatus(NP.roomId ? 'Jogo parado · sala ' + NP.roomId + ' · escolha o próximo' : 'Escolha um jogo');
   }
 
-  // ---------------------------------------------------------------- server UI
-  function connectTo(server) {
-    setApiBase(server);
-    updateServerStatus();
-    toast('Conectando a <b>' + escapeHtml(serverLabel()) + '</b>…');
-    checkBackend().then(loadSystems).then(function () {
-      refreshBiosUI();
-      toast('Conectado.', 'ok');
-    }).catch(function () { toast('Servidor indisponível.', 'err'); });
-  }
-
   function openSystem(id) {
     var sys = findSystem(id);
     if (!sys) { toast('Console não encontrado.', 'err'); return; }
@@ -1484,7 +1451,7 @@
       use.textContent = s.self ? 'É este' : 'Usar';
       if (s.self) use.disabled = true;
       use.addEventListener('click', function () {
-        connectTo(s.url);
+        connectToServer(s.url);
         el('server-panel').classList.add('hidden');
       });
 
@@ -2614,17 +2581,6 @@
 
     // 🔗 Copiar link de acesso: gera um link único que já conecta no servidor
     // atual (e na sala, se estiver numa). Funciona em qualquer aparelho.
-    el('btn-invite').addEventListener('click', function () {
-      var base = getApiBase();
-      var url = location.origin + '/play.html';
-      var params = [];
-      if (base && base !== location.origin) params.push('server=' + encodeURIComponent(base));
-      if (accessToken) params.push('token=' + encodeURIComponent(accessToken));
-      if (NP.roomId) params.push('room=' + encodeURIComponent(NP.roomId));
-      if (params.length) url += '?' + params.join('&');
-      copiarTexto(url, 'Link copiado! Envie para o amigo abrir em qualquer aparelho.', 'btn-invite', 'invite-status');
-    });
-
     // Descoberta de servidores na rede
     el('btn-discover').addEventListener('click', runDiscovery);
 
