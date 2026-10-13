@@ -100,9 +100,10 @@ vercel --prod     # produção
 Ou importe o repositório em [vercel.com/new](https://vercel.com/new).
 
 > **Funciona na Vercel:** rodar no navegador (todos os consoles), capas,
-> arquivos escolhidos no aparelho e **link (URL)** da ROM.
-> **Não existe** em serverless: biblioteca no disco do servidor, abrir no
-> RetroArch do "PC servidor" e netplay (WebSocket).
+> arquivos escolhidos no aparelho, **link (URL)** da ROM e **netplay online**
+> (`/api/ws`).
+> **Não existe** em serverless: biblioteca no disco do servidor e abrir no
+> RetroArch do "PC servidor".
 
 ---
 
@@ -241,27 +242,40 @@ Clique em **Usar** para apontar o site para aquele servidor e jogar os jogos que
 estão nele — sem digitar IP. Um servidor local (`npm start`) responde ao mesmo
 tempo em HTTP (`:3000`) e HTTPS (`:3443`, se houver certificado).
 
-### Jogar em rede (netplay LAN, com lobby)
+### Jogar em rede (netplay com lobby)
 
 O botão **👥 Jogar em rede** abre o lobby. O fluxo:
 
-1. **Host** (quem tem o jogo): inicie um jogo normalmente e abra **👥 Jogar em
-   rede → Criar sala**. É gerado um **código** e um **link**
-   (`http://192.168.0.5:3000/play.html?room=CÓDIGO`). Dá para pôr **nome** e
-   **senha** na sala.
-2. **Convidados** (qualquer aparelho da mesma rede): abrem o link (ou entram pela
-   lista de salas do lobby). **Não precisam da ROM** — recebem o vídeo/áudio do
-   host e mandam os comandos.
+1. **Host** (quem tem o jogo): abra **👥 Jogar em rede → Criar sala**. É gerado um
+   **código** e um **link** (`http://192.168.0.5:3000/play.html?room=CÓDIGO`). Dá
+   para pôr **nome** e **senha** na sala. A sala pode ser criada **antes mesmo de
+   escolher o jogo** — quando o host iniciar a partida, ela aparece para todos.
+2. **Convidados** (qualquer aparelho): abrem o link, digitam o **código** ou entram
+   pela **lista de salas** do lobby. **Não precisam da ROM** — recebem o
+   vídeo/áudio do host e mandam os comandos.
 3. O host **transmite a tela** (o emulador roda nele) e cada convidado aparece
-   como um jogador; o host pode **expulsar** quem quiser. Há **chat** simples.
+   como um **jogador** (com nome e contagem "X de 4"); o host pode **expulsar**
+   quem quiser. Há **chat** simples.
 4. Controles do convidado: **gamepad na tela** (D‑pad, A/B/X/Y, L/R, Start/Select)
    ou teclado (setas, `Z`=A, `X`=B, `A`=X, `S`=Y, `Enter`=Start, `Shift`=Select,
    `Q`=L, `R`=R).
 
-> Usa o **WebSocket `/signaling`** do próprio backend (sinalização) + **WebRTC**
-> ponto a ponto para vídeo/áudio/inputs — tudo na LAN, sem servidor externo e
-> sem TURN. O netplay **não existe na Vercel** (serverless não tem WebSocket):
-> rode o `npm start` no PC host.
+#### Escolha do sinalizador (LAN × Online)
+
+No painel **👥 Jogar em rede** há duas opções de **sinalizador**:
+
+| Modo | Usa | Alcance | Precisa de PC ligado? |
+|------|-----|---------|----------------------|
+| 🏠 **LAN (PC local)** | `ws://IP:3000/signaling` | mesma rede (Wi‑Fi) | sim (o PC host) |
+| 🌐 **Online (Vercel)** | `wss://…/api/ws` | **internet** | **não** |
+
+O link de convite (**🔗 Copiar link de convite**) já carrega `?ws=…`, então o
+convidado entra sozinho no modo certo — inclusive abrindo o link pelo site do
+Vercel. Há ainda o botão **🔌 Testar conexão** para confirmar o sinalizador.
+
+> O WebRTC continua **ponto a ponto** (vídeo/áudio/inputs), usando os servidores
+> STUN/TURN gratuitos entregues em `GET /api/netplay/ice`. O sinalizador só faz a
+> apresentação inicial entre os jogadores.
 
 #### Salas privadas
 
@@ -270,10 +284,26 @@ uma **senha**. A sala privada **não aparece** na lista pública: só entra quem
 tiver o **link** ou o **código** (botão **Entrar por código** no lobby). Bom para
 jogar só com os amigos.
 
-### 🌍 Jogar pela internet (túnel público)
+### 🌐 Netplay online sem servidor externo
 
-Como o netplay precisa do WebSocket do backend, o jeito mais simples de sair da
-LAN é **expor o servidor local por um túnel HTTPS/WSS** (sem deploy):
+A **opção 🌐 Online (Vercel)** usa o endpoint WebSocket serverless do próprio
+projeto (`api/ws.js`, servido em `/api/ws`). Nada precisa rodar no PC do host:
+basta o site estar publicado. Marque a opção, clique em **🔌 Testar conexão**,
+crie a sala e mande o link.
+
+> **Limitação conhecida** (documentada pela Vercel): conexões novas não caem
+> necessariamente na **mesma instância** da função, e o lobby guarda as salas em
+> memória. Com 2 a 4 jogadores isso funciona na grande maioria das vezes. Se
+> algum dia falhar, a solução durável é guardar o estado das salas num
+> Redis/Marketplace. Para desligar a opção: `NETPLAY_WS=0`.
+
+Como a Vercel derruba a conexão ao atingir a **duração máxima** da função, o
+frontend **reconecta sozinho** e volta para a mesma sala.
+
+### 🌍 Alternativa: jogar pela internet com túnel público
+
+Se quiser levar também a **biblioteca de ROMs do seu PC** (em vez de só o
+netplay), exponha o servidor local por um túnel HTTPS/WSS (sem deploy):
 
 ```powershell
 # instale o cloudflared (uma vez)
@@ -360,6 +390,8 @@ $env:GAMES_DIR="D:\PS1\ISOs"; npm start
 | POST   | `/api/systems/:id/launch`            | Abre o jogo no RetroArch do PC (modo “PC servidor”)  |
 | GET    | `/api/discover`                      | **Varre a rede local** e lista outros servidores WebEMU (com consoles/jogos) |
 | GET    | `/api/netplay/ice`                   | Servidores ICE (STUN/TURN) que o netplay usa (STUN + TURN público por padrão) |
+| WS     | `/signaling`                         | Sinalizador + lobby das salas — **servidor local** (modo LAN)                |
+| WS     | `/api/ws`                            | Sinalizador + lobby das salas — **Vercel** (modo online, `api/ws.js`)        |
 
 > As capas vêm do projeto **libretro-thumbnails** (No-Intro, por nome do
 > arquivo) e são servidas pelo backend — o cliente não precisa acessar o GitHub.
@@ -517,9 +549,13 @@ engrenagem). Gamepads USB/Bluetooth funcionam automaticamente (Gamepad API).
 - [x] Sem necessidade de BIOS
 
 ### ✅ Fase 2 — Multiplayer (esta entrega)
-- [x] Netplay LAN com **lobby** (criar/entrar por código ou link, senha, chat, expulsar)
+- [x] Netplay com **lobby** (criar/entrar por código ou link, senha, chat, expulsar)
+- [x] **Sala sem jogo carregado**: dá para criar a sala antes e o host inicia a partida depois
 - [x] Host transmite vídeo/áudio via **WebRTC** (`canvas.captureStream`) e aplica os inputs dos convidados
 - [x] Convidado **sem ROM**: recebe o vídeo e envia comandos (gamepad na tela + teclado)
+- [x] **Dois sinalizadores**: 🏠 LAN (`/signaling`) e 🌐 Online (`/api/ws`, serverless na Vercel)
+- [x] **Link de convite** que já carrega `?room=`, `?server=` e `?ws=` — o convidado conecta sozinho
+- [x] **Auto-reconexão**: se a conexão cair (ex.: duração máxima da função na Vercel), volta para a mesma sala
 - [x] **Descoberta de servidores na rede** (`/api/discover`) mostrando consoles e jogos de cada um
 - [ ] Rollback / sincronização de estados
 
@@ -532,8 +568,18 @@ engrenagem). Gamepads USB/Bluetooth funcionam automaticamente (Gamepad API).
 ### 🔜 Fase 3 — Netplay avançado
 - [ ] Rollback real (save/restore de estados por frame)
 - [ ] Sincronização de save states comprimida
-- [ ] TURN server para redes restritas
+- [x] TURN/STUN configuráveis (`/api/netplay/ice` + variáveis `TURN_*`)
 - [x] Lobby com lista de salas
+- [ ] Estado das salas em Redis/Marketplace (remover a limitação de instância da Vercel)
+
+### 🔧 Variáveis de ambiente do netplay
+
+| Variável | Efeito |
+|----------|--------|
+| `TURN_URLS`, `TURN_USERNAME`, `TURN_CREDENTIAL` | TURN próprio para o WebRTC (padrão: TURN público gratuito) |
+| `PUBLIC_URL` | URL pública usada nos links de convite |
+| `ACCESS_TOKEN` | Token opcional para proteger a API e o sinalizador |
+| `NETPLAY_WS=0` | **Desliga** a opção 🌐 Online na Vercel |
 
 ---
 
