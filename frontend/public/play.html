@@ -1388,19 +1388,20 @@
   }
 
   function changeGame() {
-    // Troca de jogo DENTRO da sala: não saímos. O emulador é derrubado e, ao
-    // carregar o novo jogo, npHostRecheckStream refaz a transmissão para todos.
-    if (NP.localStream) {
-      NP.localStream.getTracks().forEach(function (t) { try { t.stop(); } catch (e) {} });
-      NP.localStream = null;
-    }
+    // Troca de jogo DENTRO da sala: primeiro PARAMOS o jogo atual de verdade —
+    // núcleo pausado/descarregado, áudio desconectado e transmissão encerrada
+    // para os convidados. Assim nada continua rodando ao fundo (nem aqui, nem
+    // na sala) enquanto o jogador escolhe o próximo jogo.
+    npPararTransmissao();
+    npDestroyEmulator();
+
     var session = readJSON(LS.session);
     if (session && session.source === 'idb' && session.keys) session.keys.forEach(function (k) { idbDel(k.key); });
     removeKey(LS.session);
+
     var sys = session && findSystem(session.system);
-    el('game').innerHTML = '';
-    window.EJS_emulator = null;
     if (sys) openSystem(sys.id); else showHub();
+    npSetStatus(NP.roomId ? 'Jogo parado · sala ' + NP.roomId + ' · escolha o próximo' : 'Escolha um jogo');
   }
 
   // ---------------------------------------------------------------- server UI
@@ -1964,6 +1965,11 @@
       }
     } catch (e) {}
 
+    // ÁUDIO: a captura pluga um GainNode no contexto de áudio do emulador. Se
+    // não desconectar, o som CONTINUA tocando depois de remover o canvas —
+    // era exatamente o "jogo rodando ao fundo".
+    if (NP.audioDest) { try { NP.audioDest.disconnect(); } catch (e) {} NP.audioDest = null; }
+
     // Só depois de remover os nós do emulador o worker/núcleo perde a
     // referência e o navegador libera a CPU.
     var g = el('game');
@@ -2452,6 +2458,17 @@
       entry.connected = pc.connectionState === 'connected';
       if (entry.connected) entry.retries = 0;
       npRenderRoom();
+      if (!isHost) {
+        // Convidado: se a conexão caiu (ex.: o host trocou de jogo ou parou a
+        // transmissão), mostra o aviso de novo em vez de deixar o vídeo congelado.
+        var msg = el('np-stage-msg');
+        if (msg) {
+          if (entry.connected) { msg.style.display = 'none'; }
+          else { msg.style.display = ''; msg.textContent = 'Aguardando o host…'; }
+        }
+        var v = el('np-video');
+        if (v && !entry.connected) { try { v.pause(); } catch (e) {} }
+      }
       if (isHost && (pc.connectionState === 'failed' || pc.connectionState === 'disconnected')) {
         entry.retries = (entry.retries || 0) + 1;
         if (entry.retries <= 3 && NP.roomId && NP.isHost) {
@@ -2702,6 +2719,10 @@
     });
 
     el('btn-home').addEventListener('click', function () {
+      // Indo escolher/trocar de jogo: se o host está com uma partida rodando,
+      // paramos tudo antes (núcleo, áudio e transmissão) para nada ficar
+      // rodando ao fundo enquanto ele decide o próximo jogo.
+      if (NP.isHost && window.EJS_emulator) { npPararTransmissao(); npDestroyEmulator(); }
       // "🏠 Consoles" NÃO sai da sala: apenas volta ao seletor de consoles
       // para o jogador escolher/entrar num jogo. A sala continua aberta e o
       // botão "👥 Jogar em rede" traz o painel de volta.
