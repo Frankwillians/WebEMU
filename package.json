@@ -1,0 +1,26 @@
+{
+  "name": "ps1emu",
+  "version": "1.0.0",
+  "description": "PlayStation 1 Emulator - Browser-based with Netplay",
+  "type": "module",
+  "scripts": {
+    "dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
+    "dev:backend": "node --watch src/backend/server.js",
+    "dev:frontend": "npm --prefix frontend run dev",
+    "build": "npm --prefix frontend install && npm --prefix frontend run build",
+    "start": "node src/backend/server.js",
+    "cert": "node scripts/make-cert.mjs",
+    "setup": "npm install && npm --prefix frontend install"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "ws": "^8.14.2",
+    "cors": "^2.8.5",
+    "mime-types": "^2.1.35"
+  },
+  "devDependencies": {
+    "vite": "^5.0.0",
+    "concurrently": "^8.2.2",
+    "typescript": "^5.3.0"
+  }
+}

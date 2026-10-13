@@ -1,0 +1,45 @@
+Este diretório contém os artefatos compilados do emulador Play! (PlayStation 2)
+para WebAssembly, obtidos de https://playjs.purei.org/ (build do projeto
+open-source Play! — https://github.com/jpd002/Play-).
+
+Arquivos redistribuídos:
+  - Play.js        (glue do Emscripten)
+  - Play.wasm      (binário do emulador)
+  - static/js/main.js   (app web do Play!, com um pequeno ajuste local descrito abaixo)
+  - static/css/main.css
+
+AVISO: o build do Play!.js é um experimento. A compatibilidade e o desempenho
+variam muito entre jogos e não é indicado para celulares.
+
+Ajuste local feito em static/js/main.js:
+  O método `setFile(e){this.file=e}` do DiscImageDevice foi alterado para
+  `setFile(e){this.file=globalThis.__ps2FileOverride||e}`. Isso permite ao
+  ps1emu entregar um "pseudo-arquivo" que lê o ISO por HTTP Range (ver lan.js),
+  em vez de exigir o download completo do jogo para a memória.
+
+--------------------------------------------------------------------------
+Licença do Play! (mantida conforme exigido):
+
+Copyright (c) 2006-2026, Jean-Philip Desjardins
+All rights reserved.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
+
+ * Redistributions of source code must retain the above copyright notice,
+   this list of conditions and the following disclaimer.
+ * Redistributions in binary form must reproduce the above copyright
+   notice, this list of conditions and the following disclaimer in the
+   documentation and/or other materials provided with the distribution.
+
+THIS SOFTWARE IS PROVIDED BY THE AUTHOR AND CONTRIBUTORS ``AS IS'' AND ANY
+EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+DISCLAIMED. IN NO EVENT SHALL THE AUTHOR OR CONTRIBUTORS BE LIABLE FOR ANY
+DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+(INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
+LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
+OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH
+DAMAGE.

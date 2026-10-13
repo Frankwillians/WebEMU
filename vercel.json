@@ -1,0 +1,27 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "outputDirectory": "public",
+  "buildCommand": "node scripts/vercel-build.mjs",
+  "redirects": [
+    { "source": "/", "destination": "/play.html", "permanent": false }
+  ],
+  "rewrites": [
+    { "source": "/play", "destination": "/play.html" }
+  ],
+  "headers": [
+    {
+      "source": "/play.html",
+      "headers": [
+        { "key": "Cross-Origin-Opener-Policy", "value": "same-origin" },
+        { "key": "Cross-Origin-Embedder-Policy", "value": "require-corp" },
+        { "key": "Cache-Control", "value": "no-store" }
+      ]
+    },
+    {
+      "source": "/(.*)",
+      "headers": [
+        { "key": "X-Content-Type-Options", "value": "nosniff" }
+      ]
+    }
+  ]
+}

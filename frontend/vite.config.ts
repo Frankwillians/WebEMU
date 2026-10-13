@@ -1,0 +1,46 @@
+import { defineConfig } from 'vite';
+import react from '@vitejs/plugin-react';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+export default defineConfig({
+  plugins: [react()],
+  resolve: {
+    alias: {
+      '@': path.resolve(__dirname, './src')
+    }
+  },
+  server: {
+    port: 5173,
+    host: true,
+    proxy: {
+      '/api': {
+        target: 'http://localhost:3000',
+        changeOrigin: true
+      },
+      '/signaling': {
+        target: 'ws://localhost:3000',
+        ws: true
+      }
+    }
+  },
+  build: {
+    outDir: '../dist',
+    emptyOutDir: true,
+    sourcemap: true,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          vendor: ['react', 'react-dom', 'zustand']
+        }
+      }
+    }
+  },
+  worker: {
+    format: 'es',
+    plugins: () => []
+  }
+});

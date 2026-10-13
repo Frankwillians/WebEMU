@@ -1,0 +1,601 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>PS1 Emulator — Standalone</title>
+<style>
+  :root{
+    --bg:#0d0d1a; --bg2:#1a1a2e; --bg3:#16213e; --card:#1f1f3a; --hover:#2a2a4a;
+    --acc:#00d9ff; --acc2:#ff2e63; --ok:#00ff88; --warn:#ffaa00;
+    --tx:#fff; --tx2:#b0b0cc; --mut:#6a6a8a; --bd:#2a2a4a;
+    --r:8px; --sh:0 4px 12px rgba(0,0,0,.4);
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  html,body{height:100%;overflow:hidden}
+  body{font-family:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;background:var(--bg);color:var(--tx)}
+  ::-webkit-scrollbar{width:8px;height:8px}
+  ::-webkit-scrollbar-track{background:var(--bg2)}
+  ::-webkit-scrollbar-thumb{background:var(--bd);border-radius:4px}
+  #app{display:flex;flex-direction:column;height:100%}
+
+  header{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:8px 20px;height:56px;background:var(--bg2);border-bottom:1px solid var(--bd);flex-shrink:0}
+  .brand{display:flex;align-items:center;gap:14px}
+  .logo{font-size:24px;font-weight:900;background:linear-gradient(135deg,var(--acc),#fff,var(--acc2));-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+  .brand h1{font-size:15px;font-weight:700;line-height:1.1}
+  .brand p{font-size:11px;color:var(--mut)}
+  .hdr-status{display:flex;align-items:center;gap:8px}
+
+  .badge{display:inline-flex;align-items:center;padding:2px 8px;border-radius:9999px;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.5px}
+  .badge.info{background:rgba(0,217,255,.15);color:var(--acc)}
+  .badge.ok{background:rgba(0,255,136,.15);color:var(--ok)}
+  .badge.warn{background:rgba(255,170,0,.15);color:var(--warn)}
+  .badge.err{background:rgba(255,46,99,.15);color:var(--acc2)}
+
+  .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:8px 16px;border:none;border-radius:var(--r);font-size:14px;font-weight:600;cursor:pointer;transition:all .15s;white-space:nowrap}
+  .btn:disabled{opacity:.5;cursor:not-allowed}
+  .btn.primary{background:linear-gradient(135deg,var(--acc),#0099cc);color:var(--bg)}
+  .btn.primary:hover:not(:disabled){box-shadow:0 0 20px rgba(0,217,255,.3);transform:translateY(-1px)}
+  .btn.sec{background:var(--card);color:var(--tx);border:1px solid var(--bd)}
+  .btn.sec:hover:not(:disabled){background:var(--hover);border-color:var(--acc)}
+  .btn.danger{background:linear-gradient(135deg,var(--acc2),#cc0044);color:#fff}
+  .btn.ghost{background:transparent;color:var(--tx2)}
+  .btn.ghost:hover:not(:disabled){background:var(--hover);color:var(--tx)}
+  .btn.sm{padding:4px 8px;font-size:12px}
+
+  .body{display:flex;flex:1;min-height:0}
+  aside{width:300px;display:flex;flex-direction:column;background:var(--bg2);border-right:1px solid var(--bd);flex-shrink:0;min-height:0}
+  .tabs{display:flex;border-bottom:1px solid var(--bd)}
+  .tab{flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;padding:8px;background:transparent;border:none;border-bottom:2px solid transparent;color:var(--mut);cursor:pointer;font-size:11px;transition:all .15s}
+  .tab:hover{color:var(--tx2);background:var(--hover)}
+  .tab.active{color:var(--acc);border-bottom-color:var(--acc)}
+  .tab .ic{font-size:18px}
+  .side-content{flex:1;overflow-y:auto;padding:16px;min-height:0}
+  .panel{display:flex;flex-direction:column;gap:16px}
+  .panel h2{font-size:14px;font-weight:700}
+  .hidden{display:none!important}
+
+  .drop{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;padding:32px;border:2px dashed var(--bd);border-radius:var(--r);background:var(--bg2);cursor:pointer;transition:all .2s;min-height:200px;text-align:center}
+  .drop:hover,.drop.drag{border-color:var(--acc);background:var(--bg3)}
+  .drop.drag{box-shadow:0 0 20px rgba(0,217,255,.3)}
+  .drop h3{font-size:16px}.drop p{font-size:13px;color:var(--tx2)}
+  .formats{display:flex;flex-wrap:wrap;gap:4px;justify-content:center;margin-top:8px}
+
+  .input{width:100%;padding:8px 16px;background:var(--bg2);border:1px solid var(--bd);border-radius:var(--r);color:var(--tx);font-size:14px}
+  .input:focus{outline:none;border-color:var(--acc)}
+  .row{display:flex;gap:8px}
+  .cols{display:grid;grid-template-columns:1fr 1fr auto;gap:8px}
+
+  .game-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:16px;overflow-y:auto;flex:1}
+  .game{display:flex;flex-direction:column;gap:8px;padding:8px;background:var(--card);border:1px solid var(--bd);border-radius:var(--r);cursor:pointer;transition:all .15s;text-align:left}
+  .game:hover{border-color:var(--acc);transform:translateY(-2px);box-shadow:var(--sh)}
+  .game .cover{display:flex;align-items:center;justify-content:center;aspect-ratio:1;background:var(--bg2);border-radius:4px;color:var(--acc);font-size:28px}
+  .game .name{font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .game .meta{display:flex;justify-content:space-between;align-items:center}
+  .game .size{font-size:11px;color:var(--mut)}
+
+  .empty{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;padding:32px;color:var(--mut);text-align:center;min-height:160px}
+  main{flex:1;padding:16px;min-width:0;min-height:0}
+  .canvas-wrap{display:flex;flex-direction:column;height:100%;background:var(--bg);border:1px solid var(--bd);border-radius:12px;overflow:hidden}
+  .cbar{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:8px 16px;background:var(--bg2);border-bottom:1px solid var(--bd)}
+  .cstatus{display:flex;align-items:center;gap:8px;min-width:0}
+  .dot{width:8px;height:8px;border-radius:50%;background:var(--mut);flex-shrink:0}
+  .dot.on{background:var(--ok);box-shadow:0 0 8px var(--ok)}
+  .dot.pause{background:var(--warn)}
+  .ctitle{font-size:14px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:340px}
+  .ctitle.muted{color:var(--mut);font-weight:400}
+  .fps{font-size:12px;color:var(--ok);padding:2px 8px;background:rgba(0,255,136,.1);border-radius:4px}
+  .ccontrols{display:flex;gap:4px}
+  .canvas-box{position:relative;flex:1;display:flex;align-items:center;justify-content:center;background:#000;overflow:hidden;min-height:0}
+  canvas{width:100%;height:100%;object-fit:contain;image-rendering:pixelated}
+  .ph{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:radial-gradient(circle at center,var(--bg3),var(--bg))}
+  .ph .in{display:flex;flex-direction:column;align-items:center;gap:8px;text-align:center}
+  .ph .big{font-size:64px;font-weight:900;background:linear-gradient(135deg,var(--acc),#fff,var(--acc2));-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+  .ph h2{font-size:20px}.ph p{font-size:14px;color:var(--tx2)}
+  .pause-ov{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;background:rgba(0,0,0,.6);cursor:pointer;color:#fff}
+
+  .toasts{position:fixed;bottom:24px;right:24px;z-index:1000;display:flex;flex-direction:column;gap:8px}
+  .toast{display:flex;align-items:center;gap:8px;padding:16px;background:var(--card);border:1px solid var(--bd);border-radius:var(--r);box-shadow:0 8px 24px rgba(0,0,0,.5);min-width:280px;max-width:400px;font-size:13px;animation:slide .25s}
+  .toast.ok{border-left:4px solid var(--ok)}.toast.err{border-left:4px solid var(--acc2)}
+  .toast.info{border-left:4px solid var(--acc)}.toast.warn{border-left:4px solid var(--warn)}
+  @keyframes slide{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .spin{width:16px;height:16px;border:2px solid var(--bd);border-top-color:var(--acc);border-radius:50%;animation:spin 1s linear infinite;display:inline-block}
+  @media(max-width:768px){.body{flex-direction:column}aside{width:100%;max-height:45%;border-right:none;border-bottom:1px solid var(--bd)}}
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <div class="brand">
+      <div class="logo">PS<span style="font-size:16px">1</span></div>
+      <div><h1>PS1 Emulator</h1><p>Standalone — abre direto no navegador</p></div>
+    </div>
+    <div class="hdr-status">
+      <span id="gp-badge" class="badge ok hidden">🎮 Gamepad</span>
+      <span id="np-badge" class="badge warn hidden">👥 <span id="np-badge-txt">offline</span></span>
+      <button class="btn ghost sm" id="btn-help">❔ Ajuda</button>
+    </div>
+  </header>
+
+  <div class="body">
+    <aside>
+      <div class="tabs">
+        <button class="tab active" data-tab="local"><span class="ic">💾</span><span>Local</span></button>
+        <button class="tab" data-tab="network"><span class="ic">🌐</span><span>Rede</span></button>
+        <button class="tab" data-tab="netplay"><span class="ic">👥</span><span>Multiplayer</span></button>
+      </div>
+      <div class="side-content">
+        <!-- Painel 1: Local -->
+        <div class="panel" id="panel-local">
+          <h2>Carregar do Computador</h2>
+          <div class="drop" id="drop">
+            <div style="color:var(--acc);font-size:40px">⬆️</div>
+            <h3>Arraste sua ROM aqui</h3>
+            <p>ou clique para selecionar</p>
+            <div class="formats">
+              <span class="badge info">.bin</span><span class="badge info">.iso</span>
+              <span class="badge info">.cue</span><span class="badge info">.exe</span>
+              <span class="badge info">.img</span><span class="badge info">.pbp</span>
+            </div>
+          </div>
+          <input type="file" id="file-rom" accept=".bin,.iso,.cue,.exe,.img,.mdf,.pbp" style="display:none">
+          <input type="file" id="file-bios" accept=".bin" style="display:none">
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:16px;padding:16px;background:var(--card);border:1px solid var(--bd);border-radius:var(--r)">
+            <div><div style="font-size:14px;font-weight:600">BIOS do PS1</div><div style="font-size:12px;color:var(--mut)">Opcional — scph1001.bin</div></div>
+            <button class="btn sec sm" id="btn-bios">Carregar BIOS</button>
+          </div>
+        </div>
+
+        <!-- Painel 2: Rede -->
+        <div class="panel hidden" id="panel-network">
+          <h2>Jogos da Rede Local</h2>
+          <div class="cols">
+            <input class="input" id="game-search" placeholder="Buscar..." style="grid-column:span 3">
+            <input class="input" id="server-url" placeholder="http://IP-DO-SERVIDOR:3000" style="grid-column:span 2;font-size:12px">
+            <button class="btn primary sm" id="btn-connect">Conectar</button>
+          </div>
+          <div class="game-grid" id="game-grid"></div>
+          <div class="empty" id="game-empty">
+            <div style="font-size:32px">🌐</div>
+            <p>Informe o endereço do servidor backend e clique em Conectar</p>
+            <span style="font-size:12px">Inicie com: <code>npm start</code> na pasta ps1emu</span>
+          </div>
+        </div>
+
+        <!-- Painel 3: Multiplayer -->
+        <div class="panel hidden" id="panel-netplay">
+          <h2>Multiplayer (WebRTC)</h2>
+          <div id="np-setup">
+            <p style="font-size:13px;color:var(--tx2);margin-bottom:16px">Jogue com outro jogador na sua rede local via conexão P2P.</p>
+            <label style="font-size:12px;font-weight:600;color:var(--tx2);text-transform:uppercase">ID da Sala</label>
+            <div class="row" style="margin:8px 0 16px">
+              <input class="input" id="room-id" placeholder="ex: ps1-abc123">
+              <button class="btn sec sm" id="btn-gen">🎲</button>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:8px">
+              <button class="btn primary" id="btn-host">🛰️ Criar Sala (Host)</button>
+              <button class="btn sec" id="btn-join">➡️ Entrar na Sala</button>
+            </div>
+          </div>
+          <div id="np-active" class="hidden"></div>
+        </div>
+      </div>
+    </aside>
+
+    <main>
+      <div class="canvas-wrap">
+        <div class="cbar">
+          <div class="cstatus">
+            <span class="dot" id="c-dot"></span>
+            <span class="ctitle muted" id="c-title">Nenhuma ROM carregada</span>
+          </div>
+          <div class="ccontrols">
+            <span class="fps hidden" id="c-fps">0 FPS</span>
+            <button class="btn ghost sm" id="btn-pause" title="Pausar/Continuar" disabled>⏸️</button>
+            <button class="btn ghost sm" id="btn-reset" title="Reiniciar" disabled>🔄</button>
+            <button class="btn ghost sm" id="btn-fs" title="Tela cheia">⛶</button>
+          </div>
+        </div>
+        <div class="canvas-box" id="canvas-box">
+          <canvas id="screen" width="320" height="240"></canvas>
+          <div class="ph" id="placeholder">
+            <div class="in">
+              <div class="big">PS<span style="font-size:40px">1</span></div>
+              <h2>PS1 Emulator</h2>
+              <p>Carregue uma ROM local ou da rede para começar</p>
+            </div>
+          </div>
+          <div class="pause-ov hidden" id="pause-ov">▶️ <span>Clique para continuar</span></div>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+<div class="toasts" id="toasts"></div>
+
+<script>
+"use strict";
+/* ============================================================
+   PS1 EMULATOR — CORE (JavaScript puro, roda na thread principal)
+   Versão compacta do core modular em TypeScript/Src.
+   ============================================================ */
+const RAM_SIZE=2*1024*1024, BIOS_SIZE=512*1024, SP_SIZE=1024;
+const VRAM_W=1024, VRAM_H=512, VRAM_SIZE=VRAM_W*VRAM_H;
+const XM=0x3FF, YM=0x1FF;
+const CPU_HZ=33868800, FPS=60, CYCLES_PER_FRAME=CPU_HZ/FPS;
+const SPU_RATE=44100, SAMPLES_PER_FRAME=Math.ceil(SPU_RATE/FPS);
+
+const BTN={SELECT:1<<0,L3:1<<1,R3:1<<2,START:1<<3,UP:1<<4,RIGHT:1<<5,DOWN:1<<6,LEFT:1<<7,L2:1<<8,R2:1<<9,L1:1<<10,R1:1<<11,TRIANGLE:1<<12,CIRCLE:1<<13,CROSS:1<<14,SQUARE:1<<15};
+
+/* ---------- GPU ---------- */
+class GPU{
+  constructor(){this.vram=new Uint16Array(VRAM_SIZE);this.enabled=false;this.dx=0;this.dy=0;this.hres=320;this.vres=240;
+    this.buf=[];this.need=0;this.stat=0x14802000;this.dl=0;this.dt=0;this.dr=VRAM_W-1;this.db=VRAM_H-1;this.ox=0;this.oy=0;this.mode=0;this.gpr=0;}
+  reset(){this.vram.fill(0);this.enabled=false;this.buf=[];this.need=0;this.stat=0x14802000;}
+  bgr555(c){const r=(c&31)<<3,g=((c>>5)&31)<<3,b=((c>>10)&31)<<3;return (255<<24)|(b<<16)|(g<<8)|r;}
+  rgb24(c){const r=(c>>16)&255,g=(c>>8)&255,b=c&255;return ((b>>3)<<10)|((g>>3)<<5)|(r>>3);}
+  writeGP0(v){v>>>=0;
+    if(this.need===0){const op=v&255;this.need=this.len(op);this.buf=[v];this.need--;if(this.need===0)this.exec();}
+    else{this.buf.push(v);this.need--;if(this.need===0)this.exec();}}
+  len(op){const up=op&0xF8;
+    if(op===0x00)return 1;if(op===0x01)return 1;if(op===0x02)return 3;if(op===0x03)return 1;
+    if(up===0x20)return 4;if(up===0x28)return 5;if(up===0x30)return 6;if(up===0x38)return 7;
+    if(up===0x40)return 3;if(up===0x48)return 4;if(up===0x50)return 4;
+    if(up===0x60)return 3;if(up===0x68)return 2;if(up===0x70)return 2;if(up===0x78)return 2;
+    if(up===0x80)return 4;if(up===0xA0)return 3;if(up===0xC0)return 3;if(up===0xE0)return 1;return 1;}
+  exec(){const op=this.buf[0]&255,up=op&0xF8,w=this.buf;
+    if(op===0x02){const col=this.rgb24(w[0]>>8);const x=w[1]&0x3F0,y=(w[1]>>16)&0x1FF;const ww=((w[2]&0x3FF)+15)&~15,h=(w[2]>>16)&0x1FF;this.fill(x,y,ww,h,col);}
+    else if(up===0x20){const col=this.rgb24(w[0]&0xFFFFFF);this.tri(this.s11(w[1]&0xFFFF),this.s11((w[1]>>16)&0xFFFF),this.s11(w[2]&0xFFFF),this.s11((w[2]>>16)&0xFFFF),this.s11(w[3]&0xFFFF),this.s11((w[3]>>16)&0xFFFF),col);}
+    else if(up===0x28){const col=this.rgb24(w[0]&0xFFFFFF);this.tri(this.s11(w[3]&0xFFFF),this.s11((w[3]>>16)&0xFFFF),this.s11(w[1]&0xFFFF),this.s11((w[1]>>16)&0xFFFF),this.s11(w[2]&0xFFFF),this.s11((w[2]>>16)&0xFFFF),col);}
+    else if(up===0x30||up===0x38){const col=this.rgb24(w[0]&0xFFFFFF);this.tri(this.s11(w[1]&0xFFFF),this.s11((w[1]>>16)&0xFFFF),this.s11(w[3]&0xFFFF),this.s11((w[3]>>16)&0xFFFF),this.s11(w[5]&0xFFFF),this.s11((w[5]>>16)&0xFFFF),col);}
+    else if(up===0x40||up===0x48||up===0x50){const col=this.rgb24(w[0]&0xFFFFFF);this.line(this.s11(w[1]&0xFFFF),this.s11((w[1]>>16)&0xFFFF),this.s11(w[2]&0xFFFF),this.s11((w[2]>>16)&0xFFFF),col);}
+    else if(up===0x60||up===0x68||up===0x70||up===0x78){const col=this.rgb24(w[0]&0xFFFFFF);const x=this.s11(w[1]&0xFFFF),y=this.s11((w[1]>>16)&0xFFFF);
+      let ww=1,h=1;if(op===0x60){ww=this.s11(w[2]&0xFFFF);h=this.s11((w[2]>>16)&0xFFFF);}else if(op===0x70){ww=8;h=8;}else if(op===0x78){ww=16;h=16;}
+      for(let dy=0;dy<h;dy++)for(let dx=0;dx<ww;dx++)this.px(x+dx,y+dy,col);}
+    else if(up===0x80||up===0xC0){/* vram->vram copy (simplificado) */}
+    else if(up===0xE0){this.misc(op);}
+    this.buf=[];}
+  misc(op){const w=this.buf;
+    if(op===0xE1)this.mode=w[0]>>>24;
+    else if(op===0xE3){this.dl=w[0]&0x3FF;this.dt=(w[0]>>10)&0x1FF;}
+    else if(op===0xE4){this.dr=w[0]&0x3FF;this.db=(w[0]>>10)&0x1FF;}
+    else if(op===0xE5){let x=w[0]&0x7FF;if(x&0x400)x|=~0x7FF;let y=(w[0]>>11)&0x7FF;if(y&0x400)y|=~0x7FF;this.ox=x;this.oy=y;}}
+  s11(v){v&=0x7FF;return (v&0x400)?(v|~0x7FF):v;}
+  px(x,y,c){x=(x+this.ox)&XM;y=(y+this.oy)&YM;if(x<this.dl||x>this.dr||y<this.dt||y>this.db)return;this.vram[y*VRAM_W+x]=c&0x7FFF;}
+  fill(x,y,w,h,c){for(let dy=0;dy<h;dy++){const py=(y+dy)&YM;const base=py*VRAM_W;for(let dx=0;dx<w;dx++)this.vram[base+((x+dx)&XM)]=c;}}
+  tri(x0,y0,x1,y1,x2,y2,c){
+    if(y0>y1){[x0,x1]=[x1,x0];[y0,y1]=[y1,y0];}if(y1>y2){[x1,x2]=[x2,x1];[y1,y2]=[y2,y1];}if(y0>y1){[x0,x1]=[x1,x0];[y0,y1]=[y1,y0];}
+    const H=y2-y0;if(H===0){this.px(x0,y0,c);return;}
+    for(let y=y0;y<=y2;y++){const second=(y>y1||y1===y0);const sh=second?(y2-y1):(y1-y0);const a=sh===0?0:(y-(second?y1:y0))/sh;
+      const ax=x0+(x2-x0)*((y-y0)/H);let bx=second?(x1+(x2-x1)*a):(x0+(x1-x0)*a);
+      let lo=Math.round(Math.min(ax,bx)),hi=Math.round(Math.max(ax,bx));for(let x=lo;x<=hi;x++)this.px(x,y,c);}}
+  line(x0,y0,x1,y1,c){let dx=Math.abs(x1-x0),dy=-Math.abs(y1-y0);const sx=x0<x1?1:-1,sy=y0<y1?1:-1;let e=dx+dy;for(;;){this.px(x0,y0,c);if(x0===x1&&y0===y1)break;const e2=2*e;if(e2>=dy){e+=dy;x0+=sx;}if(e2<=dx){e+=dx;y0+=sy;}}}
+  writeGP1(v){v>>>=0;const cmd=(v>>24)&255;
+    if(cmd===0x00)this.reset();else if(cmd===0x01){this.buf=[];this.need=0;}
+    else if(cmd===0x03)this.enabled=(v&1)===0;
+    else if(cmd===0x05){this.dx=v&0x3FE;this.dy=(v>>10)&0x1FF;}
+    else if(cmd===0x08){const hr=(v>>6)&3;this.hres=[256,320,512,640][hr];this.vres=((v>>2)&1)?480:240;}}
+  getStatus(){let s=0x14802000;if(this.enabled)s|=1<<23;return s>>>0;}
+  render(w,h){const out=new Uint8Array(w*h*4);const sx=this.dx&XM,sy=this.dy&YM,sw=this.hres,sh=this.vres;
+    for(let y=0;y<h;y++){const yy=(sy+Math.floor(y*sh/h))&YM;for(let x=0;x<w;x++){const xx=(sx+Math.floor(x*sw/w))&XM;const p=this.vram[yy*VRAM_W+xx];const o=(y*w+x)*4;
+      out[o]=(p&31)<<3;out[o+1]=((p>>5)&31)<<3;out[o+2]=((p>>10)&31)<<3;out[o+3]=255;}}return out;}
+}
+
+/* ---------- SPU (simplificada) ---------- */
+class SPU{
+  constructor(){this.ram=new Uint8Array(512*1024);this.masterL=0x3FFF;this.masterR=0x3FFF;this.vActive=false;}
+  reset(){this.ram.fill(0);}
+  write(a,v){v&=0xFFFF;const o=a-0x1F801C00;if(o===0x180)this.masterL=v;else if(o===0x182)this.masterR=v;}
+  read(a){return 0;}
+  gen(n){return new Float32Array(n*2);} // silêncio no MVP standalone
+}
+
+/* ---------- BUS ---------- */
+class Bus{
+  constructor(){this.ram=new Uint8Array(RAM_SIZE);this.bios=new Uint8Array(BIOS_SIZE);this.sp=new Uint8Array(SP_SIZE);
+    this.gpu=new GPU();this.spu=new SPU();this.iStat=0;this.iMask=0;this.mc1=new Uint32Array(9);
+    this.timers=[0,0,0].map(()=>({c:0,t:0,m:0}));
+    this.dma=[0,1,2,3,4,5,6].map(()=>({base:0,bc:0,cc:0}));}
+  loadBIOS(d){this.bios.set(d.subarray(0,Math.min(d.length,BIOS_SIZE)));}
+  loadROM(d){const exe=this.parseExe(d);if(exe){this.ram.set(exe.data,exe.addr&0x1FFFFF);}else{this.ram.set(d.subarray(0,Math.min(d.length,RAM_SIZE)));}}
+  parseExe(d){const magic='PS-X EXE';for(const off of [0x800,0]){if(off+8>d.length)continue;let ok=true;for(let i=0;i<8;i++)if(d[off+i]!==magic.charCodeAt(i)){ok=false;break;}
+    if(ok){const addr=(d[off+0x18]|(d[off+0x19]<<8)|(d[off+0x1A]<<16)|(d[off+0x1B]<<24))>>>0;const size=(d[off+0x1C]|(d[off+0x1D]<<8)|(d[off+0x1E]<<16)|(d[off+0x1F]<<24))>>>0;const s=Math.min(size,d.length-(off+0x800));return {addr,data:d.subarray(off+0x800,off+0x800+s)};}}return null;}
+  r8(a){a>>>=0;if(a<0x00800000)return this.ram[a&0x1FFFFF];if(a>=0x1F800000&&a<0x1F800400)return this.sp[a&0x3FF];if(a>=0x1FC00000&&a<0x1FC80000)return this.bios[a&0x7FFFF];if(a>=0x1F801000&&a<0x1F802000)return this.io8(a);return 0;}
+  r16(a){a>>>=0;if(a<0x00800000){const i=a&0x1FFFFF;return this.ram[i]|(this.ram[i+1]<<8);}if(a>=0x1F800000&&a<0x1F800400){const i=a&0x3FF;return this.sp[i]|(this.sp[i+1]<<8);}if(a>=0x1FC00000&&a<0x1FC80000){const i=a&0x7FFFF;return this.bios[i]|(this.bios[i+1]<<8);}if(a>=0x1F801000&&a<0x1F802000)return this.io16(a);return 0;}
+  r32(a){a>>>=0;if(a<0x00800000){const i=(a&0x1FFFFF)&~3;const r=this.ram;return (r[i]|(r[i+1]<<8)|(r[i+2]<<16)|(r[i+3]<<24))>>>0;}if(a>=0x1F800000&&a<0x1F800400){const i=(a&0x3FF)&~3;const s=this.sp;return (s[i]|(s[i+1]<<8)|(s[i+2]<<16)|(s[i+3]<<24))>>>0;}if(a>=0x1FC00000&&a<0x1FC80000){const i=(a&0x7FFFF)&~3;const b=this.bios;return (b[i]|(b[i+1]<<8)|(b[i+2]<<16)|(b[i+3]<<24))>>>0;}if(a>=0x1F801000&&a<0x1F802000)return this.io32(a);return 0;}
+  w8(a,v){a>>>=0;v&=255;if(a<0x00800000){this.ram[a&0x1FFFFF]=v;return;}if(a>=0x1F800000&&a<0x1F800400){this.sp[a&0x3FF]=v;return;}if(a>=0x1F801000&&a<0x1F802000)return;}
+  w16(a,v){a>>>=0;v&=0xFFFF;if(a<0x00800000){const i=a&0x1FFFFF;this.ram[i]=v&255;this.ram[i+1]=(v>>8)&255;return;}if(a>=0x1F800000&&a<0x1F800400){const i=a&0x3FF;this.sp[i]=v&255;this.sp[i+1]=(v>>8)&255;return;}if(a>=0x1F801000&&a<0x1F802000)return this.io16w(a,v);}
+  w32(a,v){a>>>=0;v>>>=0;if(a<0x00800000){const i=(a&0x1FFFFF)&~3;const r=this.ram;r[i]=v&255;r[i+1]=(v>>8)&255;r[i+2]=(v>>16)&255;r[i+3]=(v>>24)&255;return;}if(a>=0x1F800000&&a<0x1F800400){const i=(a&0x3FF)&~3;const s=this.sp;s[i]=v&255;s[i+1]=(v>>8)&255;s[i+2]=(v>>16)&255;s[i+3]=(v>>24)&255;return;}if(a>=0x1F801000&&a<0x1F802000)return this.io32w(a,v);}
+  io8(a){return 0xFF;}
+  io16(a){if(a===0x1F801814)return this.gpu.getStatus()&0xFFFF;if(a===0x1F801070)return this.iStat;if(a===0x1F801074)return this.iMask;return 0;}
+  io32(a){if(a===0x1F801810)return this.gpu.gpr;if(a===0x1F801814)return this.gpu.getStatus();if(a===0x1F801070)return this.iStat;if(a===0x1F801074)return this.iMask;return 0;}
+  io16w(a,v){if(a>=0x1F801100&&a<0x1F801130){const i=((a-0x1F801100)/0x10)|0,reg=(a-0x1F801100)%0x10;if(i<3){if(reg===0)this.timers[i].c=v;else if(reg===4)this.timers[i].t=v;else if(reg===8)this.timers[i].m=v;}return;}
+    if(a===0x1F801074){this.iMask=v;return;}if(a===0x1F801070){this.iStat&=v;return;}if(a>=0x1F801C00)this.spu.write(a,v);}
+  io32w(a,v){if(a===0x1F801810){this.gpu.writeGP0(v);return;}if(a===0x1F801814){this.gpu.writeGP1(v);return;}
+    if(a>=0x1F801000&&a<0x1F801024){this.mc1[(a-0x1F801000)>>2]=v;return;}
+    if(a===0x1F801070){this.iStat&=v;return;}if(a===0x1F801074){this.iMask=v&0xFFFF;return;}
+    if(a>=0x1F801080&&a<0x1F801100){const ch=((a-0x1F801080)/0x10)|0,reg=(a-0x1F801080)%0x10;if(ch<7){if(reg===0)this.dma[ch].base=v;else if(reg===4)this.dma[ch].bc=v;else if(reg===8)this.dma[ch].cc=v;}return;}}
+  hasIRQ(){return (this.iStat&this.iMask)!==0;}
+  reset(){this.ram.fill(0);this.sp.fill(0);this.iStat=0;this.iMask=0;this.gpu.reset();this.spu.reset();}
+  tick(c){}
+}
+
+/* ---------- CPU (MIPS R3000A) ---------- */
+class CPU{
+  constructor(bus){this.bus=bus;this.gpr=new Uint32Array(32);this.pc=0xBFC00000;this.hi=0;this.lo=0;this.cop0=new Uint32Array(16);this.cop2=new Uint32Array(64);this.bt=0;this.ds=false;this.cyc=0;}
+  reset(){this.gpr.fill(0);this.pc=0xBFC00000;this.hi=0;this.lo=0;this.cop0.fill(0);this.cop2.fill(0);this.bt=0;this.ds=false;this.cyc=0;}
+  g(i){return this.gpr[i];}
+  s(i,v){if(i!==0)this.gpr[i]=v>>>0;}
+  step(){const pc=this.pc;const instr=this.bus.r32(pc);const wasDS=this.ds;this.ds=false;let next=(pc+4)>>>0;if(wasDS)next=this.bt>>>0;this.pc=next;this.exec(instr,pc,wasDS);this.cyc++;return 1;}
+  exec(instr,pc,ds){const op=(instr>>>26)&0x3F,rs=(instr>>>21)&0x1F,rt=(instr>>>16)&0x1F,rd=(instr>>>11)&0x1F,sh=(instr>>>6)&0x1F,f=instr&0x3F,imm=instr&0xFFFF,simm=(imm<<16)>>16,tgt=instr&0x03FFFFFF;
+    switch(op){
+      case 0x00:this.special(f,rs,rt,rd,sh,pc,ds);break;
+      case 0x02:this.br((pc&0xF0000000)|(tgt<<2),ds);break;
+      case 0x03:this.s(31,(pc+8)>>>0);this.br((pc&0xF0000000)|(tgt<<2),ds);break;
+      case 0x04:if(this.g(rs)===this.g(rt))this.br((pc+4+(simm<<2))>>>0,ds);break;
+      case 0x05:if(this.g(rs)!==this.g(rt))this.br((pc+4+(simm<<2))>>>0,ds);break;
+      case 0x06:if((this.g(rs)|0)<=0)this.br((pc+4+(simm<<2))>>>0,ds);break;
+      case 0x07:if((this.g(rs)|0)>0)this.br((pc+4+(simm<<2))>>>0,ds);break;
+      case 0x08:{const a=this.g(rs)|0,b=simm,sum=a+b;if(!(((a^sum)&(b^sum))<0))this.s(rt,sum>>>0);}break;
+      case 0x09:this.s(rt,(this.g(rs)+simm)>>>0);break;
+      case 0x0A:this.s(rt,((this.g(rs)|0)<simm)?1:0);break;
+      case 0x0B:this.s(rt,(this.g(rs)<(simm>>>0))?1:0);break;
+      case 0x0C:this.s(rt,this.g(rs)&imm);break;
+      case 0x0D:this.s(rt,this.g(rs)|imm);break;
+      case 0x0E:this.s(rt,this.g(rs)^imm);break;
+      case 0x0F:this.s(rt,(imm<<16)>>>0);break;
+      case 0x10:this.cop0c(instr,rt,rd);break;
+      case 0x12:this.cop2c(instr,rs,rt,rd,f);break;
+      case 0x20:this.s(rt,(this.bus.r8((this.g(rs)+simm)>>>0)<<24)>>24);break;
+      case 0x21:this.s(rt,(this.bus.r16((this.g(rs)+simm)>>>0)<<16)>>16);break;
+      case 0x23:this.s(rt,this.bus.r32((this.g(rs)+simm)>>>0));break;
+      case 0x24:this.s(rt,this.bus.r8((this.g(rs)+simm)>>>0));break;
+      case 0x25:this.s(rt,this.bus.r16((this.g(rs)+simm)>>>0));break;
+      case 0x22:case 0x26:this.s(rt,this.bus.r32((this.g(rs)+simm)>>>0));break;
+      case 0x28:this.bus.w8((this.g(rs)+simm)>>>0,this.g(rt)&255);break;
+      case 0x29:this.bus.w16((this.g(rs)+simm)>>>0,this.g(rt)&0xFFFF);break;
+      case 0x2B:this.bus.w32((this.g(rs)+simm)>>>0,this.g(rt));break;
+      case 0x2A:case 0x2E:this.bus.w32((this.g(rs)+simm)>>>0,this.g(rt));break;
+      case 0x32:this.cop2[rt]=this.bus.r32((this.g(rs)+simm)>>>0);break;
+      case 0x3A:this.bus.w32((this.g(rs)+simm)>>>0,this.cop2[rt]);break;
+      default:break;}}
+  br(t,ds){if(ds)this.pc=t>>>0;else{this.bt=t>>>0;this.ds=true;}}
+  special(f,rs,rt,rd,sh,pc,ds){switch(f){
+      case 0x00:this.s(rd,this.g(rt)<<sh);break;
+      case 0x02:this.s(rd,this.g(rt)>>>sh);break;
+      case 0x03:this.s(rd,(this.g(rt)|0)>>sh);break;
+      case 0x04:this.s(rd,this.g(rt)<<(this.g(rs)&0x1F));break;
+      case 0x06:this.s(rd,this.g(rt)>>>(this.g(rs)&0x1F));break;
+      case 0x07:this.s(rd,(this.g(rt)|0)>>(this.g(rs)&0x1F));break;
+      case 0x08:this.br(this.g(rs),ds);break;
+      case 0x09:this.s(rd===0?31:rd,(pc+8)>>>0);this.br(this.g(rs),ds);break;
+      case 0x0C:this.exc(0x08);break;
+      case 0x0D:this.exc(0x09);break;
+      case 0x10:this.s(rd,this.hi);break;
+      case 0x11:this.hi=this.g(rs);break;
+      case 0x12:this.s(rd,this.lo);break;
+      case 0x13:this.lo=this.g(rs);break;
+      case 0x18:{const r=BigInt(this.g(rs)|0)*BigInt(this.g(rt)|0);this.lo=Number(r&0xFFFFFFFFn)>>>0;this.hi=Number((r>>32n)&0xFFFFFFFFn)>>>0;}break;
+      case 0x19:{const r=BigInt(this.g(rs))*BigInt(this.g(rt));this.lo=Number(r&0xFFFFFFFFn)>>>0;this.hi=Number((r>>32n)&0xFFFFFFFFn)>>>0;}break;
+      case 0x1A:{const d=this.g(rt)|0,n=this.g(rs)|0;if(d===0){this.lo=n>=0?0xFFFFFFFF:1;this.hi=n>>>0;}else if(n===-2147483648&&d===-1){this.lo=0x80000000;this.hi=0;}else{this.lo=(n/d)|0;this.hi=(n%d)|0;}}break;
+      case 0x1B:{const d=this.g(rt),n=this.g(rs);if(d===0){this.lo=0xFFFFFFFF;this.hi=n;}else{this.lo=(n/d)>>>0;this.hi=(n%d)>>>0;}}break;
+      case 0x20:{const a=this.g(rs)|0,b=this.g(rt)|0,sum=a+b;if(!(((a^sum)&(b^sum))<0))this.s(rd,sum>>>0);else this.exc(0x0C);}break;
+      case 0x21:this.s(rd,(this.g(rs)+this.g(rt))>>>0);break;
+      case 0x22:{const a=this.g(rs)|0,b=this.g(rt)|0,dif=a-b;if(!(((a^b)&(a^dif))<0))this.s(rd,dif>>>0);else this.exc(0x0C);}break;
+      case 0x23:this.s(rd,(this.g(rs)-this.g(rt))>>>0);break;
+      case 0x24:this.s(rd,this.g(rs)&this.g(rt));break;
+      case 0x25:this.s(rd,this.g(rs)|this.g(rt));break;
+      case 0x26:this.s(rd,this.g(rs)^this.g(rt));break;
+      case 0x27:this.s(rd,~(this.g(rs)|this.g(rt)));break;
+      case 0x2A:this.s(rd,((this.g(rs)|0)<(this.g(rt)|0))?1:0);break;
+      case 0x2B:this.s(rd,(this.g(rs)<this.g(rt))?1:0);break;
+      default:break;}}
+  cop0c(instr,rt,rd){if((instr&0x02000000)===0)this.s(rt,this.cop0[rd]);else this.cop0[rd]=this.g(rt);}
+  cop2c(instr,rs,rt,rd,f){const bit25=(instr>>>25)&1;if(bit25===0)return;if(instr&0x00010000)this.cop2[rd]=this.g(rt);else this.s(rt,this.cop2[rd]|0);}
+  exc(cause){this.cop0[14]=this.pc;this.cop0[13]=cause<<2;this.pc=0x80000080;}
+  chkIRQ(){const sr=this.cop0[12];if((sr&1)&&this.bus.hasIRQ()){this.cop0[14]=this.pc;this.cop0[13]=0;this.pc=0x80000080;return true;}return false;}
+}
+
+/* ---------- EMULADOR ---------- */
+class Emulator{
+  constructor(){this.bus=new Bus();this.cpu=new CPU(this.bus);this.frame=0;this.running=false;this.rom=null;
+    this.ctrl={buttons:0};this.fps=0;this.fs=0;this.lastStat=performance.now();}
+  loadBIOS(buf){this.bus.loadBIOS(new Uint8Array(buf));this.cpu.reset();}
+  loadROM(buf,name){const d=new Uint8Array(buf);this.bus.loadROM(d);
+    const td=new TextDecoder('ascii',{fatal:false});const sample=td.decode(d.subarray(0,Math.min(d.length,1<<20)));
+    const m=sample.match(/([A-Z]{4})[_-]([0-9]{5})/);let serial='Unknown',region='Unknown';
+    if(m){serial=m[1]+'_'+m[2];const p=m[1].substring(0,2);const c=m[1][2];if(c==='U')region='USA';else if(c==='E')region='Europe';else if(c==='J')region='Japão';else region='Unknown';void p;}
+    this.rom={name,size:d.length,serial,region};return this.rom;}
+  start(){this.running=true;}
+  pause(){this.running=false;}
+  reset(){this.cpu.reset();this.bus.reset();this.frame=0;}
+  runFrame(){const t0=performance.now();let c=0;while(c<CYCLES_PER_FRAME){this.cpu.chkIRQ();this.cpu.step();c++;if(c>CYCLES_PER_FRAME*4)break;}
+    let vf=null;if(this.bus.gpu.enabled||this.frame<2){const px=this.bus.gpu.render(320,240);vf={w:320,h:240,px};}
+    this.frame++;this.fs++;const now=performance.now();if(now-this.lastStat>=500){this.fps=Math.round(this.fs*1000/(now-this.lastStat));this.fs=0;this.lastStat=now;}
+    void t0;return vf;}
+  setInput(b){this.ctrl.buttons=b;}
+}
+
+/* ============================================================
+   UI CONTROLLER
+   ============================================================ */
+const emu=new Emulator();
+const canvas=document.getElementById('screen');
+const ctx=canvas.getContext('2d',{alpha:false});
+let running=false,paused=false,audioCtx=null,gain=null,rafId=null;
+let keyMap=load('ps1emu.keymap',{UP:'arrowup',DOWN:'arrowdown',LEFT:'arrowleft',RIGHT:'arrowright',CROSS:'x',CIRCLE:'c',SQUARE:'s',TRIANGLE:'d',L1:'q',R1:'e',L2:'a',R2:'f',START:'enter',SELECT:'shift'});
+const keyBits={SELECT:BTN.SELECT,START:BTN.START,UP:BTN.UP,DOWN:BTN.DOWN,LEFT:BTN.LEFT,RIGHT:BTN.RIGHT,L1:BTN.L1,R1:BTN.R1,L2:BTN.L2,R2:BTN.R2,TRIANGLE:BTN.TRIANGLE,CIRCLE:BTN.CIRCLE,CROSS:BTN.CROSS,SQUARE:BTN.SQUARE};
+const pressed=new Set();
+let lastBtns=0;
+
+function load(k,def){try{const v=localStorage.getItem(k);return v?Object.assign({},def,JSON.parse(v)):def;}catch(e){return def;}}
+function toast(type,msg){const c=document.getElementById('toasts');const el=document.createElement('div');el.className='toast '+type;
+  const ic={ok:'✓',err:'✕',warn:'⚠',info:'ℹ'}[type]||'ℹ';el.innerHTML='<span style="font-weight:700">'+ic+'</span><span>'+msg+'</span>';
+  el.onclick=()=>el.remove();c.appendChild(el);setTimeout(()=>el.remove(),4000);}
+
+/* ---- Tabs ---- */
+document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{
+  document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));t.classList.add('active');
+  ['local','network','netplay'].forEach(p=>document.getElementById('panel-'+p).classList.toggle('hidden',p!==t.dataset.tab));});
+
+/* ---- Painel Local ---- */
+const drop=document.getElementById('drop'),fileRom=document.getElementById('file-rom'),fileBios=document.getElementById('file-bios');
+drop.onclick=()=>fileRom.click();
+drop.ondragover=e=>{e.preventDefault();drop.classList.add('drag');};
+drop.ondragleave=()=>drop.classList.remove('drag');
+drop.ondrop=async e=>{e.preventDefault();drop.classList.remove('drag');const f=e.dataTransfer.files[0];if(f)await loadROMFile(f);};
+fileRom.onchange=async e=>{const f=e.target.files[0];if(f)await loadROMFile(f);e.target.value='';};
+document.getElementById('btn-bios').onclick=()=>fileBios.click();
+fileBios.onchange=async e=>{const f=e.target.files[0];if(!f)return;const b=await f.arrayBuffer();emu.loadBIOS(b);toast('ok','BIOS carregada: '+f.name);e.target.value='';};
+
+async function loadROMFile(f){try{
+  toast('info','Carregando ROM: '+f.name+'...');
+  const buf=await f.arrayBuffer();const info=emu.loadROM(buf,f.name);
+  setROMStatus(info);toast('ok','ROM carregada: '+f.name);
+  startEmu();}catch(err){toast('err','Falha ao carregar: '+err.message);}}
+
+function setROMStatus(info){const t=document.getElementById('c-title');t.textContent=info.name;t.classList.remove('muted');
+  document.getElementById('c-dot').className='dot on';
+  document.getElementById('placeholder').classList.add('hidden');
+  document.getElementById('btn-pause').disabled=false;document.getElementById('btn-reset').disabled=false;
+  document.getElementById('c-fps').classList.remove('hidden');}
+
+/* ---- Emulação / render ---- */
+function startEmu(){if(running)return;running=true;paused=false;emu.start();ensureAudio();loop();}
+function togglePause(){if(!running)return;paused=!paused;if(paused)emu.pause();else emu.start();
+  document.getElementById('pause-ov').classList.toggle('hidden',!paused);
+  document.getElementById('c-dot').className='dot '+(paused?'pause':'on');
+  document.getElementById('btn-pause').textContent=paused?'▶️':'⏸️';}
+function loop(){if(!running)return;rafId=requestAnimationFrame(loop);if(paused)return;
+  const vf=emu.runFrame();
+  if(vf){const img=new ImageData(new Uint8ClampedArray(vf.px.buffer,vf.px.byteOffset,vf.px.length),vf.w,vf.h);ctx.putImageData(img,0,0);}
+  document.getElementById('c-fps').textContent=emu.fps+' FPS';}
+
+document.getElementById('btn-pause').onclick=togglePause;
+document.getElementById('pause-ov').onclick=togglePause;
+document.getElementById('btn-reset').onclick=()=>{emu.reset();toast('info','Emulador reiniciado');};
+document.getElementById('btn-fs').onclick=()=>{const b=document.getElementById('canvas-box');if(!document.fullscreenElement)b.requestFullscreen&&b.requestFullscreen();else document.exitFullscreen&&document.exitFullscreen();};
+
+/* ---- Input (teclado) ---- */
+window.addEventListener('keydown',e=>{const k=e.key.toLowerCase();if(k===' '){if(running){e.preventDefault();togglePause();}return;}
+  if(['arrowup','arrowdown','arrowleft','arrowright'].includes(k))e.preventDefault();pressed.add(k);updateInput();});
+window.addEventListener('keyup',e=>{pressed.delete(e.key.toLowerCase());updateInput();});
+function updateInput(){let m=0;for(const [btn,key] of Object.entries(keyMap))if(key&&pressed.has(key))m|=keyBits[btn]||0;
+  for(const gp of (navigator.getGamepads?navigator.getGamepads():[])){if(!gp||!gp.connected)continue;
+    const gm={CROSS:0,CIRCLE:1,SQUARE:2,TRIANGLE:3,L1:4,R1:5,L2:6,R2:7,SELECT:8,START:9,UP:12,DOWN:13,LEFT:14,RIGHT:15};
+    for(const [btn,i] of Object.entries(gm)){const b=gp.buttons[i];if(b&&b.pressed)m|=keyBits[btn]||0;}}
+  if(m!==lastBtns){lastBtns=m;emu.setInput(m);if(netplay&&netplay.connected)netplay.sendInput(m);}}
+function pollGamepad(){updateInput();requestAnimationFrame(pollGamepad);}
+window.addEventListener('gamepadconnected',e=>{document.getElementById('gp-badge').classList.remove('hidden');toast('ok','Gamepad conectado: '+(e.gamepad.id||'').slice(0,30));});
+window.addEventListener('gamepaddisconnected',()=>document.getElementById('gp-badge').classList.add('hidden'));
+pollGamepad();
+
+/* ---- Áudio (placeholder silencioso no MVP) ---- */
+function ensureAudio(){if(!audioCtx){try{audioCtx=new (window.AudioContext||window.webkitAudioContext)({sampleRate:44100});gain=audioCtx.createGain();gain.gain.value=.5;gain.connect(audioCtx.destination);}catch(e){}}if(audioCtx&&audioCtx.state==='suspended')audioCtx.resume();}
+
+/* ---- Painel Rede ---- */
+const serverUrl=document.getElementById('server-url');
+serverUrl.value=(location.protocol.startsWith('http')&&location.port)?location.origin:'http://localhost:3000';
+document.getElementById('btn-connect').onclick=()=>fetchGames(serverUrl.value);
+document.getElementById('game-search').oninput=()=>renderGames();
+let games=[];
+async function fetchGames(url){const grid=document.getElementById('game-grid'),empty=document.getElementById('game-empty');
+  grid.innerHTML='<div class="empty"><span class="spin"></span><p>Conectando ao servidor...</p></div>';empty.classList.add('hidden');
+  try{const r=await fetch(url.replace(/\/$/,'')+'/api/games');if(!r.ok)throw new Error('HTTP '+r.status);const d=await r.json();games=d.games||[];
+    toast('ok',games.length+' jogos encontrados');renderGames();}
+  catch(err){grid.innerHTML='';empty.classList.remove('hidden');empty.innerHTML='<div style="font-size:32px">⚠️</div><p>Não foi possível conectar: '+err.message+'</p><span style="font-size:12px">Verifique se o backend está rodando (npm start)</span>';toast('err','Erro de conexão: '+err.message);}}
+function renderGames(){const grid=document.getElementById('game-grid');const q=(document.getElementById('game-search').value||'').toLowerCase();
+  const list=games.filter(g=>g.name.toLowerCase().includes(q));grid.innerHTML='';
+  if(!list.length){grid.innerHTML='<div class="empty" style="grid-column:1/-1"><p>Nenhum jogo '+(q?'corresponde à busca':'no servidor')+'</p></div>';return;}
+  for(const g of list){const el=document.createElement('button');el.className='game';
+    el.innerHTML='<div class="cover">💿</div><div><div class="name" title="'+g.name+'">'+g.name+'</div><div class="meta"><span class="badge info">'+(g.extension||'').replace('.','').toUpperCase()+'</span><span class="size">'+g.sizeFormatted+'</span></div></div>';
+    el.onclick=()=>loadGameFromServer(g);grid.appendChild(el);}}
+async function loadGameFromServer(g){try{toast('info','Baixando '+g.name+'...');
+  const url=serverUrl.value.replace(/\/$/,'')+'/api/games/'+g.id+'/download';const r=await fetch(url);if(!r.ok)throw new Error('HTTP '+r.status);
+  const buf=await r.arrayBuffer();const info=emu.loadROM(buf,g.fileName||g.name);setROMStatus(info);toast('ok','ROM da rede carregada');startEmu();}
+  catch(err){toast('err','Falha: '+err.message);}}
+
+/* ---- Painel Netplay (WebRTC) ---- */
+const netplay={ws:null,pc:null,dc:null,connected:false,playerIndex:0,roomId:'',peers:[]};
+document.getElementById('btn-gen').onclick=()=>document.getElementById('room-id').value='ps1-'+Math.random().toString(36).substring(2,8);
+document.getElementById('btn-host').onclick=()=>joinNetplay(0);
+document.getElementById('btn-join').onclick=()=>joinNetplay(1);
+
+function signalingUrl(){const proto=location.protocol==='https:'?'wss:':'ws:';
+  // Servido via http(s): usa a mesma origem do backend
+  if(location.protocol.startsWith('http'))return proto+'//'+location.host+'/signaling';
+  // Aberto via file://: assume o backend local na porta 3000
+  return proto+'//localhost:3000/signaling';}
+function joinNetplay(playerIndex){const roomId=document.getElementById('room-id').value.trim();if(!roomId){toast('warn','Digite ou gere um ID de sala');return;}
+  netplay.roomId=roomId;netplay.playerIndex=playerIndex;
+  try{netplay.ws=new WebSocket(signalingUrl());}catch(e){toast('err','Falha ao abrir signaling: '+e.message);return;}
+  netplay.ws.onopen=()=>{netplay.ws.send(JSON.stringify({type:'join',payload:{roomId,playerIndex,metadata:{name:'Player '+(playerIndex+1)}}}));};
+  netplay.ws.onmessage=async ev=>{let m;try{m=JSON.parse(ev.data);}catch(e){return;}await onSignal(m);};
+  netplay.ws.onerror=()=>toast('err','Erro no signaling (o backend está rodando?)');
+  netplay.ws.onclose=()=>{toast('warn','Signaling desconectado');setNpBadge('offline',false);};
+  showNpActive();}
+
+async function onSignal(m){switch(m.type){
+  case 'peer-list':netplay.playerIndex=m.payload.yourPlayerIndex;netplay.myId=m.payload.yourId;netplay.peers=m.payload.peers;renderNpPlayers();
+    for(const p of netplay.peers){if(netplay.playerIndex<p.playerIndex)sendOffer(p.id);}break;
+  case 'peer-joined':netplay.peers.push(m.payload);renderNpPlayers();toast('info','Jogador entrou');break;
+  case 'peer-left':netplay.peers=netplay.peers.filter(p=>p.id!==m.payload.id);renderNpPlayers();toast('warn','Jogador saiu');if(netplay.pc){netplay.pc.close();netplay.pc=null;netplay.dc=null;netplay.connected=false;}break;
+  case 'offer':await onOffer(m.payload.fromId,m.payload.sdp);break;
+  case 'answer':await onAnswer(m.payload.sdp);break;
+  case 'ice-candidate':if(netplay.pc)try{await netplay.pc.addIceCandidate(m.payload.candidate);}catch(e){}break;
+  case 'error':toast('err','Signaling: '+m.payload.message);break;}}
+
+function newPC(){const pc=new RTCPeerConnection({iceServers:[{urls:'stun:stun.l.google.com:19302'}]});
+  pc.onicecandidate=e=>{if(e.candidate&&netplay.ws)netplay.ws.send(JSON.stringify({type:'ice-candidate',targetId:netplay.remoteId,payload:{candidate:e.candidate}}));};
+  pc.onconnectionstatechange=()=>{if(pc.connectionState==='connected'){netplay.connected=true;setNpBadge('P2P Online',true);toast('ok','P2P conectado!');}else if(pc.connectionState==='failed'){setNpBadge('falhou',false);}};
+  netplay.pc=pc;return pc;}
+async function sendOffer(targetId){netplay.remoteId=targetId;const pc=newPC();
+  netplay.dc=pc.createDataChannel('ps1',{ordered:true,maxRetransmits:0});setupDC(netplay.dc);
+  const offer=await pc.createOffer();await pc.setLocalDescription(offer);
+  netplay.ws.send(JSON.stringify({type:'offer',targetId,payload:{sdp:offer}}));}
+async function onOffer(fromId,sdp){netplay.remoteId=fromId;const pc=newPC();
+  pc.ondatachannel=e=>{netplay.dc=e.channel;setupDC(netplay.dc);};
+  await pc.setRemoteDescription(new RTCSessionDescription(sdp));const ans=await pc.createAnswer();await pc.setLocalDescription(ans);
+  netplay.ws.send(JSON.stringify({type:'answer',targetId:fromId,payload:{sdp:ans}}));}
+async function onAnswer(sdp){if(!netplay.pc)return;await netplay.pc.setRemoteDescription(new RTCSessionDescription(sdp));}
+function setupDC(dc){dc.binaryType='arraybuffer';dc.onopen=()=>toast('ok','DataChannel aberto');dc.onclose=()=>{netplay.connected=false;setNpBadge('desconectado',false);};dc.onmessage=ev=>{/* recebe input remoto (aplicação na Fase 2) */void ev;};}
+netplay.sendInput=function(b){if(this.dc&&this.dc.readyState==='open'){const buf=new ArrayBuffer(13);const v=new DataView(buf);v.setUint8(0,1);v.setUint32(1,emu.frame,true);v.setUint32(5,this.playerIndex,true);v.setUint32(9,b,true);this.dc.send(buf);}};
+
+function showNpActive(){document.getElementById('np-setup').classList.add('hidden');
+  const box=document.getElementById('np-active');box.classList.remove('hidden');
+  box.innerHTML='<div style="display:flex;align-items:center;gap:8px;margin-bottom:12px"><span class="dot on"></span><div><div style="font-weight:600">Sala: '+netplay.roomId+'</div><div style="font-size:12px;color:var(--mut)">Player '+(netplay.playerIndex+1)+(netplay.playerIndex===0?' (Host)':'')+'</div></div></div>'+
+    '<div style="display:flex;justify-content:space-between;padding:8px 16px;background:var(--card);border-radius:8px;font-size:13px"><span>Status</span><span class="badge warn" id="np-state">Aguardando...</span></div>'+
+    '<div id="np-players" style="margin-top:12px"></div>'+
+    '<button class="btn danger" id="btn-np-disc" style="margin-top:12px">Desconectar</button>';
+  document.getElementById('btn-np-disc').onclick=disconnectNetplay;
+  setNpBadge(netplay.playerIndex===0?'hosting':'conectando',true);renderNpPlayers();}
+function renderNpPlayers(){const el=document.getElementById('np-players');if(!el)return;
+  let h='<div style="font-size:12px;font-weight:600;color:var(--tx2);text-transform:uppercase;margin-bottom:8px">Jogadores ('+(netplay.peers.length+1)+'/2)</div>';
+  h+='<div style="display:flex;align-items:center;gap:8px;padding:8px;background:var(--card);border-radius:4px;font-size:13px;margin-bottom:4px"><span class="dot on"></span>Player '+(netplay.playerIndex+1)+' (você)</div>';
+  for(const p of netplay.peers)h+='<div style="display:flex;align-items:center;gap:8px;padding:8px;background:var(--card);border-radius:4px;font-size:13px;margin-bottom:4px"><span class="dot '+(p.ready?'on':'')+'"></span>Player '+(p.playerIndex+1)+'</div>';
+  el.innerHTML=h;
+  const st=document.getElementById('np-state');if(st){st.className='badge '+(netplay.connected?'ok':'warn');st.textContent=netplay.connected?'Conectado':(netplay.playerIndex===0?'Aguardando jogador...':'Conectando...');}}
+function setNpBadge(txt,show){const b=document.getElementById('np-badge');document.getElementById('np-badge-txt').textContent=txt;b.className='badge '+(netplay.connected?'ok':'warn');b.classList.toggle('hidden',!show);}
+function disconnectNetplay(){if(netplay.dc)netplay.dc.close();if(netplay.pc)netplay.pc.close();if(netplay.ws)netplay.ws.close();
+  netplay.connected=false;netplay.pc=null;netplay.dc=null;netplay.peers=[];
+  document.getElementById('np-setup').classList.remove('hidden');document.getElementById('np-active').classList.add('hidden');
+  setNpBadge('offline',false);toast('info','Desconectado');}
+
+/* ---- Ajuda ---- */
+document.getElementById('btn-help').onclick=()=>{
+  alert('PS1 EMULATOR — Standalone\n\n'+
+    '1) LOCAL: arraste um arquivo .bin/.iso/.exe ou clique na área.\n'+
+    '   Opcional: carregue a BIOS (scph1001.bin).\n\n'+
+    '2) REDE: inicie o backend com "npm start" (porta 3000) e clique\n'+
+    '   em Conectar para listar/baixar ROMs do servidor.\n\n'+
+    '3) MULTIPLAYER: use um ID de sala igual nos dois navegadores.\n'+
+    '   Precisa do backend (signaling na porta 8080).\n\n'+
+    'Controles: setas = D-pad, X=✕, C=○, S=□, D=△, Q/E=L1/R1,\n'+
+    'A/F=L2/R2, Enter=Start, Shift=Select, Espaço=pausar.');};
+
+toast('info','Pronto! Arraste uma ROM para começar.');
+console.log('%c PS1 Emulator Standalone carregado ','background:#00d9ff;color:#000;font-weight:700');
+</script>
+</body>
+</html>

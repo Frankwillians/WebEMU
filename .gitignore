@@ -1,0 +1,48 @@
+node_modules/
+dist/
+frontend/dist/
+
+# Saida estatica gerada para a Vercel (copia de frontend/public)
+/public/
+.env
+*.log
+
+# Certificados HTTPS locais (contêm chave privada) — gerados por `npm run cert`
+certs/
+
+# Builds recompilados (PS2/PSP) — gerados localmente pelos projetos
+# psp-web-recomp / ps2-web-recomp. São pesados e contêm tradução do executável
+# do jogo (direitos do dono do jogo), então NÃO devem ser publicados.
+recomp/*
+!recomp/README.md
+
+# Configurações locais (pasta de jogos escolhida em runtime, etc.)
+ps1emu.config.json
+
+# Não versione ROMs/ISOs de jogos
+games/
+roms/
+games/*.bin
+games/*.iso
+games/*.cue
+games/*.img
+games/*.mdf
+games/*.pbp
+games/*.chd
+games/*.exe
+
+# Não versione ISOs de PS2 (experimental)
+ps2games/*
+!ps2games/README.md
+ps2games/**/*.iso
+ps2games/**/*.chd
+ps2games/**/*.cso
+ps2games/**/*.isz
+ps2games/**/*.bin
+ps2games/**/*.img
+ps2games/**/*.elf
+ps2games/**/*.mds
+
+# Não versione BIOS (direitos autorais da Sony)
+bios/*.bin
+bios/*.rom

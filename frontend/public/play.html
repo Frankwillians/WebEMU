@@ -1,0 +1,2251 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Central de Emulação</title>
+  <style>
+    :root {
+      --bg: #0b0f17; --bg-2: #0f1622; --bg-3: #1b2536;
+      --border: #243044; --text: #e8eefc; --muted: #8b9ab3;
+      --accent: #3b82f6; --accent-2: #22d3ee;
+      --ok: #22c55e; --warn: #f59e0b; --err: #ef4444;
+      --radius: 12px; --shadow: 0 10px 30px rgba(0,0,0,.45);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; min-height: 100vh;
+      background: radial-gradient(1200px 600px at 50% -10%, #16233a 0%, #0b111c 60%);
+      color: #e8eefc; font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+    }
+    .hidden { display: none !important; }
+
+    /* topbar */
+    .topbar {
+      display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+      padding: 12px 18px; border-bottom: 1px solid #243044;
+      background: rgba(16,23,36,.85); backdrop-filter: blur(8px);
+      position: sticky; top: 0; z-index: 20;
+    }
+    .brand { display: flex; align-items: center; gap: 12px; }
+    .logo {
+      width: 42px; height: 42px; border-radius: 12px; display: grid; place-items: center;
+      background: linear-gradient(135deg, #2563eb, #7c3aed); font-size: 22px;
+      box-shadow: 0 6px 18px rgba(37,99,235,.4);
+    }
+    .brand h1 { margin: 0; font-size: 18px; letter-spacing: -.3px; }
+    .brand small { color: #8b9ab3; font-size: 12px; }
+    .top-actions { margin-left: auto; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+
+    .badge {
+      display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600;
+      padding: 5px 10px; border-radius: 999px; border: 1px solid #243044; background: #131b28; color: #8b9ab3;
+    }
+    .badge .dot { width: 8px; height: 8px; border-radius: 50%; background: #8b9ab3; }
+    .badge.ok { color: #86efac; border-color: #166534; }
+    .badge.ok .dot { background: #22c55e; }
+    .badge.err { color: #fca5a5; border-color: #7f1d1d; }
+    .badge.err .dot { background: #ef4444; }
+
+    .btn {
+      display: inline-flex; align-items: center; gap: 6px; cursor: pointer;
+      padding: 9px 14px; border-radius: 10px; font-size: 13px; font-weight: 600;
+      border: 1px solid #2b3a52; background: #1b2740; color: #dbe6f6; transition: .15s;
+    }
+    .btn:hover { background: #22314a; }
+    .btn.primary { background: linear-gradient(135deg, #2563eb, #3b82f6); border-color: transparent; color: #fff; }
+    .btn.sm { padding: 7px 10px; font-size: 12px; }
+    .btn:disabled { opacity: .5; cursor: not-allowed; }
+
+    /* panels */
+    .panel { max-width: 1100px; margin: 16px auto; padding: 14px; border: 1px solid #243044; border-radius: 12px; background: #101827; }
+    .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+    .row.between { justify-content: space-between; }
+    .input {
+      flex: 1; min-width: 180px; padding: 9px 11px; border-radius: 9px;
+      border: 1px solid #2b3a52; background: #0e1624; color: #e8eefc; font-size: 13px;
+    }
+    .hint { color: #93a3bd; font-size: 12px; line-height: 1.5; margin: 8px 0 0; }
+    .lan-url { color: #67e8f9; word-break: break-all; font-family: ui-monospace, Consolas, monospace; }
+    .status-line { font-size: 12px; color: #93a3bd; }
+    .status-line .ok { color: #22c55e; }
+    .status-line .err { color: #f87171; }
+
+    /* launcher */
+    .launcher { max-width: 1100px; margin: 0 auto; padding: 22px 18px 60px; }
+    .hero { text-align: center; margin-bottom: 26px; }
+    .hero h1 { font-size: clamp(24px, 4vw, 38px); margin: 0 0 8px; }
+    .hero h1 span { background: linear-gradient(135deg, #3b82f6, #22d3ee); -webkit-background-clip: text; background-clip: text; color: transparent; }
+    .hero p { margin: 0; color: #9aa8c2; }
+
+    .sys-grid { display: block; }
+    .cat-title { text-transform: uppercase; font-size: 11px; letter-spacing: .08em; color: #7c8aa5; margin: 22px 4px 10px; }
+    .sys-row { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; }
+    .sys-card {
+      --c: #3b82f6;
+      position: relative; overflow: hidden; text-align: left; cursor: pointer;
+      display: grid; grid-template-columns: 48px 1fr auto; gap: 10px; align-items: center;
+      padding: 14px; border-radius: 14px; border: 1px solid #243044;
+      background: linear-gradient(180deg, #121b2b, #0e1624); color: inherit; transition: .15s;
+    }
+    .sys-card::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 4px; background: var(--c); }
+    .sys-card:hover { transform: translateY(-2px); border-color: var(--c); box-shadow: 0 10px 26px rgba(0,0,0,.35); }
+    .sys-ico { width: 48px; height: 48px; border-radius: 12px; display: grid; place-items: center; font-size: 24px;
+      background: color-mix(in srgb, var(--c) 22%, transparent); }
+    .sys-info b { display: block; font-size: 14px; }
+    .sys-count { font-size: 12px; color: #8b9ab3; }
+    .sys-short { font-size: 11px; font-weight: 800; padding: 3px 7px; border-radius: 7px; background: #0e1624; border: 1px solid #2b3a52; color: #b6c3da; }
+    .sys-tags { grid-column: 1 / -1; display: flex; gap: 6px; flex-wrap: wrap; margin-top: 4px; }
+    .pill { font-size: 10px; font-weight: 700; padding: 3px 8px; border-radius: 999px; background: #1b2740; border: 1px solid #2b3a52; color: #a8b7d1; }
+    .pill.ok { color: #86efac; border-color: #166534; }
+    .pill.warn { color: #fcd34d; border-color: #78350f; }
+
+    .crumb { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
+    .crumb-title { color: #93a3bd; font-size: 13px; }
+    .sys-head { display: flex; align-items: center; gap: 14px; margin-bottom: 20px; }
+    .sys-big-ico { font-size: 44px; }
+    .sys-head h1 { margin: 0; font-size: clamp(22px, 3.4vw, 32px); }
+
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(320px, 100%), 1fr)); gap: 16px; }
+    .card { background: linear-gradient(180deg, #131c2c, #0f1622); border: 1px solid #243044; border-radius: 14px; padding: 16px; }
+    .card h2 { margin: 0 0 10px; font-size: 15px; display: flex; align-items: center; gap: 8px; }
+    .card.muted-card { opacity: .6; }
+
+    .drop {
+      border: 2px dashed #33507a; border-radius: 12px; padding: 22px 14px; text-align: center;
+      color: #9aa8c2; cursor: pointer; transition: .15s; background: rgba(37,99,235,.05);
+    }
+    .drop:hover, .drop.drag { border-color: #3b82f6; color: #e8eefc; background: rgba(37,99,235,.12); }
+    .drop.disabled { opacity: .5; cursor: not-allowed; }
+    .drop .big { font-size: 30px; }
+
+    /* game grid with covers */
+    .games-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(132px, 1fr)); gap: 12px; margin-top: 10px; }
+    .game-card {
+      display: flex; flex-direction: column; overflow: hidden; border-radius: 12px;
+      border: 1px solid #243044; background: #0e1624; transition: .15s;
+    }
+    .game-card:hover { transform: translateY(-2px); border-color: #3b82f6; box-shadow: 0 10px 26px rgba(0,0,0,.4); }
+    .game-cover {
+      position: relative; aspect-ratio: 1 / 1; overflow: hidden;
+      background: linear-gradient(135deg, color-mix(in srgb, var(--c, #3b82f6) 35%, #0e1624), #0b111c);
+      display: grid; place-items: center;
+    }
+    .game-cover .fallback { position: absolute; font-size: 34px; opacity: .65; }
+    .game-cover img { position: relative; width: 100%; height: 100%; object-fit: cover; display: block; opacity: 0; transition: opacity .3s; }
+    .game-cover img.loaded { opacity: 1; }
+    .game-body { padding: 8px 9px 9px; display: flex; flex-direction: column; gap: 6px; flex: 1; }
+    .game-name { font-size: 12px; font-weight: 600; line-height: 1.3; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; min-height: 31px; }
+    .game-meta { font-size: 10px; color: #8b9ab3; }
+    .game-actions { display: flex; gap: 6px; margin-top: auto; }
+    .game-actions .btn { flex: 1; justify-content: center; padding: 6px 4px; }
+
+    .core-opt { display: flex; gap: 10px; align-items: flex-start; padding: 10px; border: 1px solid #243044; border-radius: 10px; background: #0e1624; margin-bottom: 8px; cursor: pointer; }
+    .core-opt input { margin-top: 3px; }
+    .core-opt b { font-size: 13px; }
+    .core-opt small { display: block; color: #93a3bd; font-size: 11px; line-height: 1.5; }
+    .core-opt.off { opacity: .55; cursor: not-allowed; }
+
+    .list { display: flex; flex-direction: column; gap: 8px; max-height: 280px; overflow-y: auto; margin: 10px 0; }
+    .list-item { display: flex; align-items: center; gap: 10px; padding: 9px 11px; border: 1px solid #223148; border-radius: 10px; background: #0e1624; }
+    .list-item .meta { flex: 1; min-width: 0; }
+    .list-item .meta b { display: block; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .list-item .meta span { font-size: 11px; color: #93a3bd; }
+    .empty { color: #7c8aa5; font-size: 12px; padding: 12px; text-align: center; border: 1px dashed #2b3a52; border-radius: 10px; }
+
+    .foot { color: #7c8aa5; font-size: 12px; margin-top: 26px; text-align: center; line-height: 1.6; }
+    code { background: #1b2740; padding: 1px 6px; border-radius: 6px; }
+
+    /* player */
+    .player { display: flex; flex-direction: column; height: calc(100vh - 67px); }
+    .player-bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 9px 14px; border-bottom: 1px solid #243044; background: #101827; }
+    .player-bar .name { font-size: 13px; font-weight: 700; max-width: 42vw; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .game-wrap { flex: 1; min-height: 0; position: relative; background: #000; }
+    #game { position: absolute; inset: 0; }
+    .loading-overlay { position: absolute; inset: 0; display: grid; place-items: center; background: rgba(5,8,14,.85); text-align: center; padding: 20px; z-index: 10; }
+    .spinner { width: 42px; height: 42px; border-radius: 50%; border: 4px solid rgba(255,255,255,.15); border-top-color: #3b82f6; animation: spin .9s linear infinite; margin: 0 auto 14px; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* toasts */
+    .toasts { position: fixed; right: 16px; bottom: 16px; z-index: 100; display: flex; flex-direction: column; gap: 8px; max-width: min(420px, 88vw); }
+    .toast { padding: 12px 14px; border-radius: 10px; font-size: 13px; line-height: 1.45; background: #16223a; border: 1px solid #2b3a52; box-shadow: 0 10px 30px rgba(0,0,0,.45); }
+    .toast.err { border-color: #7f1d1d; }
+    .toast.ok { border-color: #14532d; }
+    .toast.warn { border-color: #78350f; }
+
+    /* descoberta de servidores na rede */
+    .srv-consoles { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+    .srv-chip { font-size: 11px; padding: 3px 8px; border-radius: 999px; background: #0e1624; border: 1px solid #2b3a52; color: #b6c3da; white-space: nowrap; }
+    .srv-chip b { color: #67e8f9; }
+    .srv-item { flex-direction: column; align-items: stretch; }
+    .srv-item .top { display: flex; align-items: center; gap: 10px; }
+
+    /* netplay (sala + palco do convidado) */
+    .np-stage { position: absolute; inset: 0; background: #000; z-index: 6; display: block; }
+    .np-stage video { width: 100%; height: 100%; object-fit: contain; background: #000; display: block; }
+    .np-msg { position: absolute; inset: 0; display: grid; place-items: center; text-align: center; padding: 20px;
+      color: #cbd5e1; background: rgba(5,8,14,.72); font-size: 14px; }
+    .np-pad { position: absolute; left: 0; right: 0; bottom: 0; z-index: 8; padding: 14px;
+      display: flex; justify-content: space-between; align-items: flex-end; gap: 12px; pointer-events: none; }
+    .np-pad > * { pointer-events: auto; }
+    .np-dpad { display: grid; grid-template-columns: repeat(3, 46px); grid-template-rows: repeat(3, 46px); gap: 4px; }
+    .np-cluster { display: grid; grid-template-columns: repeat(2, 54px); grid-auto-rows: 54px; gap: 8px; }
+    .np-btn {
+      border: 1px solid #33455f; background: rgba(27,39,64,.88); color: #dbe6f6;
+      border-radius: 12px; font-size: 12px; font-weight: 700; display: grid; place-items: center;
+      user-select: none; -webkit-user-select: none; touch-action: none; cursor: pointer;
+    }
+    .np-btn.round { border-radius: 50%; }
+    .np-btn.on { background: #2563eb; border-color: #3b82f6; color: #fff; }
+    .np-pill { padding: 10px 16px; border-radius: 999px; }
+    .np-center { display: flex; flex-direction: column; gap: 8px; align-self: center; }
+
+    @media (max-width: 640px) {
+      .brand h1 { font-size: 16px; }
+      .launcher { padding: 16px 12px 48px; }
+      .sys-row { grid-template-columns: 1fr; }
+      .np-dpad { grid-template-columns: repeat(3, 42px); grid-template-rows: repeat(3, 42px); }
+      .np-cluster { grid-template-columns: repeat(2, 48px); grid-auto-rows: 48px; }
+    }
+  </style>
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">
+    <span class="logo">🎮</span>
+    <div>
+      <h1>Central de Emulação</h1>
+      <small id="brand-sub">Carregando…</small>
+    </div>
+  </div>
+  <div class="top-actions">
+    <span id="backend-badge" class="badge"><span class="dot"></span> Servidor…</span>
+    <button id="btn-server-toggle" class="btn sm" type="button">🌐 Servidor</button>
+    <button id="btn-lobby-toggle" class="btn sm" type="button">👥 Jogar em rede</button>
+    <button id="btn-home" class="btn sm hidden" type="button">🏠 Consoles</button>
+  </div>
+</header>
+
+<!-- SERVER PANEL -->
+<section id="server-panel" class="panel hidden">
+  <div class="row">
+    <input id="server-input" class="input" type="text" placeholder="http://192.168.0.5:3000" spellcheck="false" />
+    <button id="btn-connect" class="btn sm primary" type="button">Conectar</button>
+  </div>
+  <p class="hint" id="server-status">Usando o servidor desta página.</p>
+  <p class="hint">De outro aparelho: <span id="lan-url" class="lan-url">—</span></p>
+
+  <div class="row" style="margin-top:12px">
+    <button id="btn-discover" class="btn sm" type="button">🔍 Buscar servidores na rede</button>
+    <span class="hint" id="discover-status" style="margin:0"></span>
+  </div>
+  <div id="discover-list" class="list"></div>
+  <p class="hint">Procura outras instâncias do WebEMU na sua rede local (Wi-Fi/Ethernet) e mostra <strong>quais consoles e quantos jogos</strong> cada uma tem. Clique em <strong>Usar</strong> para jogar pelo servidor de outro PC.</p>
+</section>
+
+<!-- NETPLAY / LOBBY PANEL -->
+<section id="lobby-panel" class="panel hidden">
+  <div class="row between">
+    <strong>👥 Jogar em rede (LAN)</strong>
+    <span class="hint" id="np-status" style="margin:0">—</span>
+  </div>
+
+  <div class="row" style="margin-top:8px">
+    <input id="np-name" class="input" type="text" maxlength="20" placeholder="Seu nome" spellcheck="false" style="max-width:220px" />
+    <button id="btn-np-refresh" class="btn sm" type="button">🔄 Atualizar salas</button>
+  </div>
+
+  <div id="np-lobby-view">
+    <div class="row" style="margin-top:8px">
+      <input id="np-join-code" class="input" type="text" maxlength="8" placeholder="Código da sala (ex.: ABC12)" spellcheck="false" style="max-width:220px; text-transform:uppercase" />
+      <button id="btn-np-join" class="btn sm" type="button">Entrar por código</button>
+    </div>
+    <p class="hint">Entre numa sala aberta ou crie a sua. Para <strong>criar</strong>, inicie um jogo primeiro — o jogo roda no seu aparelho (host) e é transmitido aos convidados.</p>
+    <div id="np-rooms" class="list"><div class="empty">Nenhuma sala aberta.</div></div>
+    <div class="row" style="margin-top:8px">
+      <input id="np-room-name" class="input" type="text" placeholder="Nome da sala (opcional)" spellcheck="false" />
+      <input id="np-room-pass" class="input" type="text" placeholder="Senha (opcional)" spellcheck="false" style="max-width:150px" />
+      <label class="hint" style="display:flex;align-items:center;gap:6px;margin:0;cursor:pointer"><input id="np-private" type="checkbox" /> Sala privada (só por link/código)</label>
+      <button id="btn-np-create" class="btn sm primary" type="button">➕ Criar sala</button>
+    </div>
+    <p class="hint">Os convidados entram pelo <strong>código</strong> ou pelo link. Salas <strong>privadas</strong> não aparecem na lista pública — só entram quem tem o código/link.</p>
+  </div>
+
+  <div id="np-room-view" class="hidden">
+    <div class="row between" style="margin-top:10px">
+      <span>Sala <b id="np-code" class="lan-url">—</b></span>
+      <div class="row" style="gap:6px">
+        <button id="btn-np-copy" class="btn sm" type="button">🔗 Copiar link</button>
+        <button id="btn-np-leave" class="btn sm" type="button">🚪 Sair da sala</button>
+      </div>
+    </div>
+    <p class="hint" id="np-link"></p>
+
+    <div class="row between" style="margin-top:10px">
+      <strong>Jogadores</strong>
+      <span class="hint" id="np-players-count" style="margin:0">—</span>
+    </div>
+    <div id="np-players" class="list"></div>
+
+    <div class="row" style="margin-top:10px">
+      <input id="np-chat-input" class="input" type="text" placeholder="Mensagem para a sala…" spellcheck="false" />
+      <button id="btn-np-chat" class="btn sm" type="button">Enviar</button>
+    </div>
+    <div id="np-chat" class="list" style="max-height:150px"></div>
+  </div>
+</section>
+
+<!-- HUB -->
+<main id="view-hub" class="launcher">
+  <div class="hero">
+    <h1>Escolha um <span>console</span></h1>
+    <p>Carregue uma ROM do seu aparelho ou jogue os arquivos da pasta compartilhada na rede.</p>
+  </div>
+  <div id="systems-grid" class="sys-grid">
+    <div class="empty">Carregando consoles…</div>
+  </div>
+  <p class="foot">
+    Coloque as ROMs nas pastas do servidor (ex.: <code>games/</code>, <code>roms/snes/</code>) ou abra um arquivo local.<br />
+    Você também pode <strong>rodar no PC servidor</strong> quando o RetroArch estiver instalado.
+  </p>
+</main>
+
+<!-- SYSTEM VIEW -->
+<main id="view-system" class="launcher hidden">
+  <div class="crumb">
+    <button id="btn-back-hub" class="btn sm" type="button">⬅ Todos os consoles</button>
+    <span id="sys-crumb" class="crumb-title"></span>
+  </div>
+
+  <div class="sys-head">
+    <span id="sys-icon" class="sys-big-ico">🎮</span>
+    <div>
+      <h1 id="sys-title">Console</h1>
+      <p id="sys-note" class="hint"></p>
+    </div>
+  </div>
+
+  <div class="grid">
+    <section class="card" id="card-mode">
+      <h2><span class="ico">🧭</span> Como rodar</h2>
+      <div id="mode-options"></div>
+      <p class="hint" id="mode-note"></p>
+    </section>
+
+    <section class="card" id="card-local">
+      <h2><span class="ico">💾</span> Arquivo do meu aparelho</h2>
+      <p class="hint" id="local-hint">Arraste e solte ou clique para escolher.</p>
+      <div id="dropzone" class="drop">
+        <div class="big">🎮</div>
+        <div>Arraste o arquivo aqui ou <strong>clique para escolher</strong></div>
+      </div>
+      <input id="rom-input" type="file" class="hidden" />
+      <p class="hint" id="local-disabled-note" style="display:none">No modo <strong>PC servidor</strong> use um jogo da pasta da rede (o arquivo precisa estar no PC).</p>
+    </section>
+
+    <section class="card" id="card-url">
+      <h2><span class="ico">🔗</span> Jogar por link (URL)</h2>
+      <p class="hint">Cole um <strong>link direto</strong> para a ROM/ISO (ex.: <code>https://…/jogo.zip</code>). O jogo roda aqui no navegador — nada é instalado.</p>
+      <div class="row" style="gap:8px;margin-top:8px">
+        <input id="rom-url" class="input" type="url" placeholder="https://exemplo.com/jogo.iso" spellcheck="false" style="flex:1;min-width:0" />
+        <button id="btn-rom-url" class="btn primary" type="button" style="flex:0 0 auto">▶ Jogar</button>
+      </div>
+      <label class="hint" style="display:flex;gap:8px;align-items:center;margin-top:8px;cursor:pointer">
+        <input id="rom-url-proxy" type="checkbox" />
+        Baixar pelo servidor desta página (evita bloqueio de CORS)
+      </label>
+      <p class="hint" id="rom-url-note"></p>
+    </section>
+
+    <section class="card" id="card-wasm">
+      <h2><span class="ico">🧠</span> Núcleo (navegador)</h2>
+      <p class="hint">Escolha o núcleo do EmulatorJS. Trocar exige reiniciar o jogo.</p>
+      <div id="core-options"></div>
+    </section>
+
+    <section class="card" id="card-network">
+      <h2><span class="ico">📚</span> Jogos da rede</h2>
+      <div class="row between">
+        <span class="status-line" id="games-count">—</span>
+        <button id="btn-refresh-games" class="btn sm" type="button">🔄 Atualizar</button>
+      </div>
+      <div class="row" style="margin-top:8px">
+        <input id="game-filter" class="input" type="search" placeholder="🔎 Buscar jogo pelo nome…" spellcheck="false" />
+      </div>
+      <div id="games-list" class="games-grid"><div class="empty">Carregando…</div></div>
+      <div class="row">
+        <input id="dir-input" class="input" type="text" placeholder="Pasta de jogos no servidor" spellcheck="false" />
+        <button id="btn-save-dir" class="btn sm" type="button">Salvar</button>
+      </div>
+      <p class="hint">Pasta: <span id="dir-view" class="lan-url">—</span></p>
+    </section>
+
+    <section class="card" id="card-external">
+      <h2><span class="ico">🕹️</span> Emulador de PS2</h2>
+      <p class="hint">No navegador, o PS2 usa o <strong>Play! .js</strong> (experimental) em uma página própria. Lá você também pode escolher um ISO do seu aparelho.</p>
+      <button id="btn-open-external" class="btn primary" type="button">▶ Abrir emulador de PS2</button>
+    </section>
+
+    <section class="card" id="card-recomp">
+      <h2><span class="ico">⚡</span> Builds recompilados (WASM)</h2>
+      <p class="hint">Jogos convertidos por recompilação estática (projetos <code>ps2-web-recomp</code> / <code>psp-web-recomp</code>). São feitos por jogo, gerados no Linux, e rodam no navegador com WebGPU/WebGL2. Coloque os builds em <code>recomp/ps2/</code> ou <code>recomp/psp/</code>.</p>
+      <div id="recomp-list" class="list"><div class="empty">Nenhum build encontrado.</div></div>
+    </section>
+
+    <section class="card" id="card-bios">
+      <h2><span class="ico">🧩</span> BIOS (opcional)</h2>
+      <p class="hint">O PCSX-ReARMed roda muitos jogos sem BIOS. Para máxima compatibilidade envie uma (ex.: <code>scph5501.bin</code>).</p>
+      <div class="row">
+        <select id="bios-region" class="input">
+          <option value="US">EUA (scph5501.bin)</option>
+          <option value="EU">Europa (scph5502.bin)</option>
+          <option value="JP">Japão (scph5500.bin)</option>
+        </select>
+        <button id="btn-bios-file" class="btn sm" type="button">📂 Enviar BIOS</button>
+        <input id="bios-input" type="file" class="hidden" accept=".bin,.rom" />
+      </div>
+      <div id="bios-status" class="status-line"><span class="muted">Nenhuma BIOS selecionada.</span></div>
+      <div id="bios-list" class="list"></div>
+    </section>
+  </div>
+</main>
+
+<!-- PLAYER -->
+<section id="view-player" class="player hidden">
+  <div class="player-bar">
+    <span id="player-name" class="name">—</span>
+    <span id="player-core" class="badge"><span class="dot"></span> <span class="core-label">—</span></span>
+    <span id="np-badge" class="badge hidden"><span class="dot"></span> <span id="np-badge-txt">—</span></span>
+    <div class="spacer" style="flex:1"></div>
+    <button id="btn-restart" class="btn sm" type="button">🔁 Reiniciar</button>
+    <button id="btn-fullscreen" class="btn sm" type="button">⛶ Tela cheia</button>
+    <button id="btn-change" class="btn sm" type="button">⬅ Trocar jogo</button>
+    <button id="btn-np-exit" class="btn sm hidden" type="button">🚪 Sair da sala</button>
+  </div>
+  <div class="game-wrap">
+    <div id="game"></div>
+    <div id="boot-overlay" class="loading-overlay">
+      <div>
+        <div class="spinner"></div>
+        <div id="boot-msg">Iniciando emulador…</div>
+        <div class="hint">Baixando núcleo WebAssembly (pode demorar na primeira vez).</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div id="toasts" class="toasts"></div>
+
+<script>
+/* =========================================================================
+ *  Central de Emulação — seletor de console + launcher (EmulatorJS/WASM)
+ * ========================================================================= */
+(function () {
+  'use strict';
+
+  var IS_FILE = location.protocol === 'file:';
+  var EJS_CDN = 'https://cdn.emulatorjs.org/stable/data/';
+  var EJS_CDN_FALLBACK = 'https://cdn.emulatorjs.org/latest/data/';
+
+  var LS = {
+    session: 'ps1emu.session',
+    bios: 'ps1emu.bios',
+    apiBase: 'ps1emu.apiBase',
+    cores: 'ps1emu.cores',
+    modes: 'ps1emu.modes',
+    legacyCore: 'ps1emu.core',
+    romProxy: 'ps1emu.romProxy',
+    npName: 'ps1emu.npName',
+    accessToken: 'ps1emu.accessToken'
+  };
+
+  // Lê o token da query string (?token=...) e armazenamento local.
+  var accessToken = '';
+  try {
+    accessToken = new URLSearchParams(location.search).get('token') || '';
+    if (accessToken) localStorage.setItem(LS.accessToken, accessToken);
+  } catch {}
+  if (!accessToken) accessToken = String(localStorage.getItem(LS.accessToken) || '');
+
+  // ------------------------------------------------------------------ utils
+  function el(id) { return document.getElementById(id); }
+  function show(node) { if (node) node.classList.remove('hidden'); }
+  function hide(node) { if (node) node.classList.add('hidden'); }
+  function readJSON(k) { try { return JSON.parse(localStorage.getItem(k)); } catch (e) { return null; } }
+  function writeJSON(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
+  function removeKey(k) { try { localStorage.removeItem(k); } catch (e) {} }
+
+  function escapeHtml(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  }
+
+  function fmtBytes(b) {
+    if (!b) return '0 B';
+    var k = 1024, s = ['B', 'KB', 'MB', 'GB', 'TB'], i = Math.floor(Math.log(b) / Math.log(k));
+    return parseFloat((b / Math.pow(k, i)).toFixed(2)) + ' ' + s[i];
+  }
+
+  function toast(msg, type, ms) {
+    var box = el('toasts');
+    var t = document.createElement('div');
+    t.className = 'toast ' + (type || '');
+    t.innerHTML = msg;
+    box.appendChild(t);
+    var life = ms || (type === 'err' ? 9000 : 4500);
+    setTimeout(function () { t.style.opacity = '0'; t.style.transition = 'opacity .35s'; }, life);
+    setTimeout(function () { t.remove(); }, life + 400);
+  }
+
+  // ------------------------------------------------------------ IndexedDB
+  var DB_NAME = 'ps1emu-launcher', STORE = 'blobs';
+  function idbOpen() {
+    return new Promise(function (resolve, reject) {
+      var req = indexedDB.open(DB_NAME, 1);
+      req.onupgradeneeded = function () {
+        var db = req.result;
+        if (!db.objectStoreNames.contains(STORE)) db.createObjectStore(STORE);
+      };
+      req.onsuccess = function () { resolve(req.result); };
+      req.onerror = function () { reject(req.error); };
+    });
+  }
+  function idbPut(key, val) {
+    return idbOpen().then(function (db) {
+      return new Promise(function (resolve, reject) {
+        var tx = db.transaction(STORE, 'readwrite');
+        tx.objectStore(STORE).put(val, key);
+        tx.oncomplete = function () { resolve(); };
+        tx.onerror = function () { reject(tx.error); };
+      });
+    });
+  }
+  function idbGet(key) {
+    return idbOpen().then(function (db) {
+      return new Promise(function (resolve, reject) {
+        var tx = db.transaction(STORE, 'readonly');
+        var rq = tx.objectStore(STORE).get(key);
+        rq.onsuccess = function () { resolve(rq.result); };
+        rq.onerror = function () { reject(rq.error); };
+      });
+    });
+  }
+  function idbDel(key) {
+    return idbOpen().then(function (db) {
+      return new Promise(function (resolve) {
+        var tx = db.transaction(STORE, 'readwrite');
+        tx.objectStore(STORE).delete(key);
+        tx.oncomplete = function () { resolve(); };
+      });
+    });
+  }
+
+  // --------------------------------------------------------------- backend
+  var backendOk = false;
+  var systemsList = [];
+  var currentSystem = null;
+  var netplayAvailable = false;   // o servidor desta página tem signaling (netplay LAN)?
+  var serverLanUrl = '';          // ex.: http://192.168.0.5:3000 (para montar o link da sala)
+  var serverPublicUrl = '';       // URL pública (túnel) configurada no backend, se houver
+
+  function getApiBase() { return readJSON(LS.apiBase) || ''; }
+  function api(path, opts) {
+    var url = getApiBase() + path;
+    if (accessToken) url += (url.includes('?') ? '&' : '?') + 'token=' + encodeURIComponent(accessToken);
+    return fetch(url, opts);
+  }
+  function setApiBase(v) {
+    if (v) localStorage.setItem(LS.apiBase, v.replace(/\/+$/, ''));
+    else removeKey(LS.apiBase);
+  }
+  function serverLabel() { return getApiBase() || (IS_FILE ? 'http://localhost:3000' : location.origin); }
+  function toAbs(url) {
+    if (!url) return url;
+    if (/^(https?:|blob:|data:)/i.test(url)) return url;
+    return getApiBase() + url;
+  }
+
+  function checkBackend() {
+    return api('/api/health').then(function (r) {
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return r.json();
+    }).then(function (j) {
+      backendOk = true;
+      netplayAvailable = !!j.netplay;
+      if (j.lanUrl) serverLanUrl = j.lanUrl;
+      if (j.publicUrl) serverPublicUrl = j.publicUrl;
+      loadIceServers();
+      el('backend-badge').className = 'badge ok';
+      el('backend-badge').innerHTML = '<span class="dot"></span> Servidor online';
+      if (j.lanUrl) el('lan-url').textContent = j.lanUrl + '/play.html';
+      updateServerStatus();
+      return j;
+    }).catch(function (e) {
+      backendOk = false;
+      el('backend-badge').className = 'badge err';
+      el('backend-badge').innerHTML = '<span class="dot"></span> Servidor offline';
+      updateServerStatus();
+      throw e;
+    });
+  }
+
+  function updateServerStatus() {
+    var st = el('server-status');
+    if (!st) return;
+    st.innerHTML = backendOk
+      ? '<span class="ok">●</span> Conectado a <b>' + escapeHtml(serverLabel()) + '</b>'
+      : '<span class="err">●</span> Sem conexão com <b>' + escapeHtml(serverLabel()) + '</b>';
+  }
+
+  // ---------------------------------------------------------------- systems
+  function findSystem(id) {
+    for (var i = 0; i < systemsList.length; i++) if (systemsList[i].id === id) return systemsList[i];
+    return null;
+  }
+  function getCoreFor(sys) {
+    var map = readJSON(LS.cores) || {};
+    if (map[sys.id]) return map[sys.id];
+    if (sys.id === 'ps1') { var legacy = readJSON(LS.legacyCore); if (legacy) return legacy; }
+    return sys.defaultCore || (sys.cores && sys.cores[0] && sys.cores[0].id) || null;
+  }
+  function setCoreFor(sys, core) {
+    var map = readJSON(LS.cores) || {};
+    map[sys.id] = core;
+    writeJSON(LS.cores, map);
+    toast('Núcleo: <b>' + escapeHtml(core) + '</b>. Reinicie o jogo para aplicar.', 'warn');
+  }
+  var MODE_LABELS = {
+    web: 'Neste aparelho (navegador)',
+    host: 'PC servidor (nativo)'
+  };
+  function getMode(sys) {
+    var map = readJSON(LS.modes) || {};
+    var mode = map[sys.id];
+    if (mode !== 'web' && mode !== 'host') mode = null;
+    if (mode) return mode;
+    return (sys.modes && sys.modes[0]) || 'web';
+  }
+  function setMode(sys, mode) {
+    var map = readJSON(LS.modes) || {};
+    map[sys.id] = mode;
+    writeJSON(LS.modes, map);
+    toast('Modo: <b>' + (MODE_LABELS[mode] || mode) + '</b>.', 'ok');
+  }
+
+  function loadSystems() {
+    return api('/api/systems').then(function (r) {
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return r.json();
+    }).then(function (j) {
+      systemsList = j.systems || [];
+      el('brand-sub').textContent = systemsList.length + ' consoles · ' + (j.totalGames || 0) + ' jogos';
+      renderHub();
+      return j;
+    });
+  }
+
+  // -------------------------------------------------------------------- HUB
+  function renderHub() {
+    var grid = el('systems-grid');
+    grid.innerHTML = '';
+    if (!systemsList.length) {
+      grid.innerHTML = '<div class="empty">Nenhum console disponível.</div>';
+      return;
+    }
+    var byCat = {}, order = [];
+    systemsList.forEach(function (s) {
+      if (!byCat[s.category]) { byCat[s.category] = []; order.push(s.category); }
+      byCat[s.category].push(s);
+    });
+    order.forEach(function (cat) {
+      var title = document.createElement('div');
+      title.className = 'cat-title';
+      title.textContent = cat;
+      grid.appendChild(title);
+      var row = document.createElement('div');
+      row.className = 'sys-row';
+      byCat[cat].forEach(function (s) { row.appendChild(sysCard(s)); });
+      grid.appendChild(row);
+    });
+  }
+
+  function sysCard(s) {
+    var card = document.createElement('button');
+    card.type = 'button';
+    card.className = 'sys-card';
+    card.style.setProperty('--c', s.color || '#3b82f6');
+    var tags = ['<span class="pill">' + (s.kind === 'external' ? 'Navegador' : 'WASM') + '</span>'];
+    if (s.native) tags.push('<span class="pill ok">PC nativo</span>');
+    if (s.needsBios) tags.push('<span class="pill warn">BIOS</span>');
+    card.innerHTML =
+      '<span class="sys-ico">' + escapeHtml(s.icon || '🎮') + '</span>' +
+      '<span class="sys-info"><b>' + escapeHtml(s.name) + '</b><span class="sys-count">' +
+      s.count + (s.count === 1 ? ' jogo' : ' jogos') + '</span></span>' +
+      '<span class="sys-short">' + escapeHtml(s.short) + '</span>' +
+      '<span class="sys-tags">' + tags.join('') + '</span>';
+    card.addEventListener('click', function () { openSystem(s.id); });
+    return card;
+  }
+
+  // ------------------------------------------------------------ SYSTEM VIEW
+  function renderSystemView(sys) {
+    el('sys-icon').textContent = sys.icon || '🎮';
+    el('sys-title').textContent = sys.name;
+    el('sys-crumb').textContent = sys.name;
+    el('sys-note').textContent = sys.note || '';
+
+    var isExternal = sys.kind === 'external';
+
+    var input = el('rom-input');
+    input.setAttribute('accept', (sys.extensions || []).join(','));
+    input.value = '';
+
+    el('card-local').style.display = isExternal ? 'none' : '';
+    el('card-external').style.display = isExternal ? '' : 'none';
+    el('card-wasm').style.display = isExternal ? 'none' : '';
+    el('card-bios').style.display = (sys.id === 'ps1') ? '' : 'none';
+
+    // Builds recompilados (PS2/PSP): só fazem sentido nesses consoles.
+    var showRecomp = sys.id === 'ps2' || sys.id === 'psp';
+    el('card-recomp').style.display = showRecomp ? '' : 'none';
+    renderRecompBuilds(showRecomp ? sys.id : null);
+
+    el('local-hint').textContent = isExternal
+      ? ''
+      : 'Formatos aceitos: ' + (sys.extensions || []).join(', ') + '.';
+
+    renderModeOptions(sys);
+    renderCoreOptions(sys);
+
+    el('dir-input').value = sys.dir || '';
+    el('dir-view').textContent = sys.dir || '—';
+    el('games-count').textContent = '—';
+    el('games-list').innerHTML = '<div class="empty">Carregando…</div>';
+
+    updateModeDependent(sys);
+  }
+
+  // Lista os builds recompilados (WebAssembly por jogo) disponíveis no servidor.
+  // Esses builds abrem como página própria (top-level) por causa do COOP/COEP.
+  function renderRecompBuilds(kind) {
+    var box = el('recomp-list');
+    if (!box) return;
+    if (!kind) { box.innerHTML = ''; return; }
+    box.innerHTML = '<div class="empty">Procurando builds…</div>';
+    api('/api/recomp?kind=' + encodeURIComponent(kind))
+      .then(function (r) { return r.json(); })
+      .then(function (j) {
+        var builds = (j && j.builds) || [];
+        if (!builds.length) {
+          box.innerHTML = '<div class="empty">Nenhum build recompilado encontrado. ' +
+            'Gere um com os projetos <code>ps2-web-recomp</code> / <code>psp-web-recomp</code> ' +
+            'e coloque em <code>recomp/' + kind + '/&lt;jogo&gt;/</code>.</div>';
+          return;
+        }
+        box.innerHTML = '';
+        builds.forEach(function (b) {
+          var row = document.createElement('div');
+          row.className = 'list-item';
+          row.innerHTML =
+            '<div class="meta"><b>' + escapeHtml(b.title) + '</b>' +
+            '<span>' + escapeHtml(String(b.kind).toUpperCase()) +
+            (b.hasDisc ? ' · com disco' : '') + ' · WebAssembly</span></div>';
+          var btn = document.createElement('button');
+          btn.type = 'button';
+          btn.className = 'btn primary';
+          btn.textContent = '▶ Jogar';
+          btn.addEventListener('click', function () {
+            window.open(toAbs(b.url), '_blank');
+          });
+          row.appendChild(btn);
+          box.appendChild(row);
+        });
+      })
+      .catch(function () {
+        box.innerHTML = '<div class="empty">Não foi possível listar os builds recompilados.</div>';
+      });
+  }
+
+  function renderModeOptions(sys) {
+    var box = el('mode-options');
+    box.innerHTML = '';
+    var cur = getMode(sys);
+    var opts = [
+      {
+        id: 'web',
+        title: '📱 Neste aparelho (navegador)',
+        desc: sys.kind === 'external'
+          ? 'Roda o emulador direto no site, dentro do seu celular/PC, usando o Play! .js.'
+          : 'Roda o emulador direto no site, dentro do seu celular/PC (WebAssembly). Nada é emulado no servidor.'
+      },
+      {
+        id: 'host',
+        title: '🖥️ PC servidor (nativo)',
+        desc: 'Roda no PC que hospeda o site (RetroArch). É mais rápido, mas o jogo abre no PC — não no celular.'
+      }
+    ];
+    opts.forEach(function (o) {
+      var available = (sys.modes || []).indexOf(o.id) >= 0;
+      var label = document.createElement('label');
+      label.className = 'core-opt' + (available ? '' : ' off');
+      label.innerHTML =
+        '<input type="radio" name="runmode" value="' + o.id + '"' + (o.id === cur ? ' checked' : '') + (available ? '' : ' disabled') + ' />' +
+        '<span><b>' + o.title + '</b><small>' + o.desc +
+        (available ? '' : ' <em>(indisponível — instale o core no RetroArch)</em>') + '</small></span>';
+      var radio = label.querySelector('input');
+      radio.addEventListener('change', function () {
+        if (radio.checked) { setMode(sys, o.id); updateModeDependent(sys); }
+      });
+      box.appendChild(label);
+    });
+    el('mode-note').innerHTML = sys.native
+      ? 'No celular, escolha <b>Neste aparelho</b>: o emulador roda no próprio celular, dentro do site. O <b>PC servidor</b> usa a força do PC (o jogo abre lá).'
+      : 'Este console roda <b>no próprio aparelho</b>, dentro do site. (O RetroArch não foi detectado no servidor.)';
+  }
+
+  function renderCoreOptions(sys) {
+    var box = el('core-options');
+    box.innerHTML = '';
+    if (!sys.cores || !sys.cores.length) {
+      box.innerHTML = '<div class="empty">Sem núcleos do navegador para este console.</div>';
+      return;
+    }
+    var cur = getCoreFor(sys);
+    sys.cores.forEach(function (c) {
+      var label = document.createElement('label');
+      label.className = 'core-opt';
+      label.innerHTML =
+        '<input type="radio" name="core" value="' + escapeHtml(c.id) + '"' + (c.id === cur ? ' checked' : '') + ' />' +
+        '<span><b>' + escapeHtml(c.label || c.id) + '</b><small>' + escapeHtml(c.note || '') + '</small></span>';
+      var radio = label.querySelector('input');
+      radio.addEventListener('change', function () { if (radio.checked) setCoreFor(sys, c.id); });
+      box.appendChild(label);
+    });
+  }
+
+  function updateModeDependent(sys) {
+    var mode = getMode(sys);
+    var isHost = mode === 'host';
+    var dz = el('dropzone');
+    var note = el('local-disabled-note');
+    var card = el('card-local');
+    if (isHost) {
+      dz.classList.add('disabled');
+      card.classList.add('muted-card');
+      note.style.display = '';
+      note.innerHTML = 'No modo <strong>PC servidor</strong> use um jogo da pasta da rede (o arquivo precisa estar no PC).';
+    } else {
+      dz.classList.remove('disabled');
+      card.classList.remove('muted-card');
+      note.style.display = 'none';
+    }
+    // "Jogar por link (URL)" também roda no navegador, então só fica ativo no
+    // modo "Neste aparelho".
+    var urlCard = el('card-url');
+    var urlInput = el('rom-url');
+    var urlBtn = el('btn-rom-url');
+    var urlNote = el('rom-url-note');
+    if (urlCard) urlCard.classList.toggle('muted-card', isHost);
+    if (urlInput) urlInput.disabled = isHost;
+    if (urlBtn) urlBtn.disabled = isHost;
+    if (urlNote) {
+      urlNote.innerHTML = isHost
+        ? 'Troque para <b>📱 Neste aparelho (navegador)</b> para usar um link.'
+        : '';
+    }
+  }
+
+  // ------------------------------------------------------------------ games
+  function loadGames(sys) {
+    var box = el('games-list');
+    var count = el('games-count');
+    count.textContent = 'Carregando…';
+    api('/api/systems/' + encodeURIComponent(sys.id) + '/games').then(function (r) {
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return r.json();
+    }).then(function (j) {
+      count.textContent = j.count + (j.count === 1 ? ' jogo' : ' jogos');
+      if (j.dir) {
+        el('dir-view').textContent = j.dir;
+        if (!el('dir-input').value) el('dir-input').value = j.dir;
+      }
+      if (!j.games || !j.games.length) {
+        box.innerHTML = '<div class="empty">Nenhum jogo nesta pasta. Copie arquivos e clique em Atualizar.</div>';
+        return;
+      }
+      box.innerHTML = '';
+      j.games.forEach(function (g) {
+        box.appendChild(gameCard(sys, g));
+      });
+    }).catch(function (e) {
+      el('games-count').textContent = '—';
+      box.innerHTML = '<div class="empty">Falha ao listar jogos (' + escapeHtml(e && e.message ? e.message : e) + ').</div>';
+    });
+  }
+
+  // URL da capa (proxy do servidor, que busca no libretro-thumbnails).
+  function coverUrl(sys, g) {
+    var base = (g.name || g.fileName || '').replace(/\.[^.]+$/, '');
+    return getApiBase() + '/api/systems/' + encodeURIComponent(sys.id) +
+      '/cover?name=' + encodeURIComponent(base);
+  }
+
+  // Cartão de jogo com capa + ações.
+  function gameCard(sys, g) {
+    var card = document.createElement('div');
+    card.className = 'game-card';
+    card.dataset.name = (g.name || '').toLowerCase();
+    card.style.setProperty('--c', sys.color || '#3b82f6');
+
+    var cover = document.createElement('div');
+    cover.className = 'game-cover';
+    var fb = document.createElement('span');
+    fb.className = 'fallback';
+    fb.textContent = sys.icon || '🎮';
+    var img = document.createElement('img');
+    img.alt = '';
+    img.loading = 'lazy';
+    img.decoding = 'async';
+    // CORS: necessário para as capas continuarem carregando quando a página
+    // está cross-origin isolated (COEP) e o servidor de jogos é outro.
+    img.crossOrigin = 'anonymous';
+    img.onload = function () { img.classList.add('loaded'); };
+    img.onerror = function () { img.remove(); };
+    img.src = coverUrl(sys, g);
+    cover.appendChild(fb);
+    cover.appendChild(img);
+
+    var body = document.createElement('div');
+    body.className = 'game-body';
+    var name = document.createElement('div');
+    name.className = 'game-name';
+    name.title = g.name;
+    name.textContent = g.name;
+    var meta = document.createElement('div');
+    meta.className = 'game-meta';
+    meta.textContent = (g.extension || '').replace('.', '').toUpperCase() + ' · ' + (g.sizeFormatted || '');
+    var actions = document.createElement('div');
+    actions.className = 'game-actions';
+    var play = document.createElement('button');
+    play.type = 'button';
+    play.className = 'btn sm primary';
+    play.textContent = '▶ Jogar';
+    play.onclick = function () { playGame(sys, g); };
+    actions.appendChild(play);
+    body.appendChild(name);
+    body.appendChild(meta);
+    body.appendChild(actions);
+
+    card.appendChild(cover);
+    card.appendChild(body);
+    return card;
+  }
+
+  function refreshGames() {
+    if (!currentSystem) return;
+    api('/api/systems/' + encodeURIComponent(currentSystem.id) + '/rescan', { method: 'POST' })
+      .catch(function () {})
+      .then(function () { loadGames(currentSystem); });
+  }
+
+  function filterGames() {
+    var input = el('game-filter');
+    if (!input) return;
+    var q = (input.value || '').trim().toLowerCase();
+    var cards = el('games-list').querySelectorAll('.game-card');
+    var shown = 0;
+    Array.prototype.forEach.call(cards, function (c) {
+      var ok = !q || (c.dataset.name || '').indexOf(q) >= 0;
+      c.style.display = ok ? '' : 'none';
+      if (ok) shown++;
+    });
+    var count = el('games-count');
+    if (q) count.textContent = shown + ' de ' + cards.length + ' jogos';
+    else count.textContent = cards.length + (cards.length === 1 ? ' jogo' : ' jogos');
+  }
+
+  // --------------------------------------------------------------- launching
+  function playGame(sys, game) {
+    if (getMode(sys) === 'host') { launchNative(sys, game); return; }
+    if (sys.kind === 'external') { openExternal(sys, game); return; }
+    writeJSON(LS.session, {
+      system: sys.id,
+      core: getCoreFor(sys),
+      mode: 'web',
+      source: 'url',
+      url: game.url,
+      name: game.fileName || game.name
+    });
+    startPlayer();
+  }
+
+  // Abre um jogo a partir de um link (URL) direto para a ROM/ISO. O arquivo é
+  // baixado pelo navegador (ou pelo servidor, se o proxy estiver marcado) e roda
+  // no EmulatorJS — nada é instalado.
+  function playByUrl() {
+    var sys = currentSystem;
+    if (!sys) { toast('Escolha um console primeiro.', 'warn'); return; }
+    var input = el('rom-url');
+    var raw = ((input && input.value) || '').trim();
+    if (!raw) { toast('Cole o link da ROM.', 'warn'); if (input) input.focus(); return; }
+    var abs;
+    try { abs = new URL(raw, location.href); } catch (e) { toast('Link inválido.', 'err'); return; }
+    if (abs.protocol !== 'http:' && abs.protocol !== 'https:') { toast('Use um link http(s).', 'err'); return; }
+    var proxy = !!(el('rom-url-proxy') && el('rom-url-proxy').checked);
+    var parts = abs.pathname.split('/').filter(Boolean);
+    var fileName = parts.length ? decodeURIComponent(parts[parts.length - 1]) : 'jogo.iso';
+    if (sys.kind === 'external') {
+      // PS2 (Play! .js) tem página própria.
+      openExternal(sys, { url: abs.href, fileName: fileName, name: fileName, size: 0 });
+      return;
+    }
+    writeJSON(LS.session, {
+      system: sys.id,
+      core: getCoreFor(sys),
+      mode: 'web',
+      source: 'url',
+      name: fileName,
+      url: abs.href,
+      proxy: proxy
+    });
+    startPlayer();
+  }
+
+  function openExternal(sys, game) {
+    var page = toAbs(sys.page || '/ps2/');
+    if (!game) { location.href = page; return; }
+    location.href = page +
+      '?url=' + encodeURIComponent(toAbs(game.url)) +
+      '&name=' + encodeURIComponent(game.fileName || game.name || 'game.iso') +
+      '&size=' + encodeURIComponent(game.size || 0);
+  }
+
+  function launchNative(sys, game) {
+    toast('Abrindo <b>' + escapeHtml(game.name) + '</b> no PC servidor…');
+    api('/api/systems/' + encodeURIComponent(sys.id) + '/launch', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ gameId: game.id })
+    }).then(function (r) {
+      return r.json().then(function (j) { return { ok: r.ok, j: j }; });
+    }).then(function (res) {
+      if (!res.ok) throw new Error((res.j && res.j.error) || 'Falha ao abrir');
+      toast(res.j.message || 'Abrindo no PC…', 'ok');
+    }).catch(function (e) {
+      toast('Erro: ' + escapeHtml(e && e.message ? e.message : e), 'err');
+    });
+  }
+
+  // -------------------------------------------------------------- local files
+  function startLocal(files) {
+    var sys = currentSystem;
+    if (!sys) return;
+    if (getMode(sys) === 'host') {
+      toast('No modo <b>PC servidor</b> escolha um jogo da pasta da rede.', 'warn');
+      return;
+    }
+    var exts = sys.extensions || [];
+    var list = Array.prototype.slice.call(files);
+    list.sort(function (a, b) {
+      function rank(n) { var m = /\.([a-z0-9]+)$/i.exec(n || ''); return m ? exts.indexOf('.' + m[1].toLowerCase()) : -1; }
+      return rank(b.name) - rank(a.name);
+    });
+
+    var stamp = Date.now();
+    var entries = list.map(function (f, i) {
+      return { key: 'rom:' + stamp + ':' + i, name: f.name, file: f };
+    });
+
+    Promise.all(entries.map(function (e) { return idbPut(e.key, e.file); })).then(function () {
+      writeJSON(LS.session, {
+        system: sys.id,
+        core: getCoreFor(sys),
+        mode: 'web',
+        source: 'idb',
+        name: entries[0].name,
+        keys: entries.map(function (e) { return { key: e.key, name: e.name }; })
+      });
+      startPlayer();
+    }).catch(function (e) {
+      console.error(e);
+      toast('Erro ao guardar o arquivo: ' + escapeHtml(e && e.message ? e.message : e), 'err');
+    });
+  }
+
+  // -------------------------------------------------------------------- BIOS
+  var BIOS_NAME_BY_REGION = { US: 'scph5501.bin', EU: 'scph5502.bin', JP: 'scph5500.bin' };
+  function getBios() { return readJSON(LS.bios); }
+
+  function refreshBiosUI() {
+    var box = el('bios-list');
+    var status = el('bios-status');
+    if (!box) return;
+    var bios = getBios();
+    if (bios) status.innerHTML = '<span class="ok">●</span> Selecionada: <b>' + escapeHtml(bios.name) + '</b> (' + escapeHtml(bios.region || '?') + ')';
+    else status.innerHTML = '<span class="muted">Nenhuma BIOS selecionada.</span>';
+
+    if (!backendOk) { box.innerHTML = ''; return; }
+    api('/api/bios').then(function (r) { return r.json(); }).then(function (j) {
+      if (!j.bios || !j.bios.length) { box.innerHTML = '<div class="empty">Nenhuma BIOS no servidor (pasta <code>bios/</code>).</div>'; return; }
+      box.innerHTML = '';
+      j.bios.forEach(function (b) {
+        var item = document.createElement('div');
+        item.className = 'list-item';
+        item.innerHTML = '<div class="meta"><b>' + escapeHtml(b.name) + '</b><span>' + escapeHtml(b.region) + ' · ' + b.sizeFormatted + '</span></div>';
+        var use = document.createElement('button');
+        use.type = 'button';
+        use.className = 'btn sm';
+        use.textContent = 'Usar';
+        use.onclick = function () {
+          writeJSON(LS.bios, { source: 'url', url: b.url, name: b.name, region: b.region });
+          refreshBiosUI();
+          toast('BIOS selecionada.', 'ok');
+        };
+        item.appendChild(use);
+        box.appendChild(item);
+      });
+    }).catch(function () { box.innerHTML = ''; });
+  }
+
+  function handleBiosFile(file) {
+    if (!file) return;
+    var region = el('bios-region').value;
+    var target = BIOS_NAME_BY_REGION[region] || 'scph5501.bin';
+    file.arrayBuffer().then(function (buf) {
+      return api('/api/bios/upload?name=' + encodeURIComponent(target), {
+        method: 'POST', headers: { 'Content-Type': 'application/octet-stream' }, body: buf
+      });
+    }).then(function (r) { return r.json().then(function (j) { if (!r.ok) throw new Error(j.error || 'Falha'); return j; }); })
+      .then(function (j) {
+        writeJSON(LS.bios, { source: 'url', url: j.url, name: j.name, region: j.region });
+        refreshBiosUI();
+        toast('BIOS enviada (' + j.sizeFormatted + ').', 'ok');
+      })
+      .catch(function (e) { toast('Erro na BIOS: ' + escapeHtml(e && e.message ? e.message : e), 'err'); });
+  }
+
+  // --------------------------------------------------------------- player/boot
+  function showHub() {
+    show(el('view-hub'));
+    hide(el('view-system'));
+    hide(el('view-player'));
+    hide(el('btn-home'));
+  }
+
+  function bootPlayer(session, sys) {
+    showPlayer(session, sys);
+    bootOverlay('Carregando ' + (session.name || 'jogo') + '…');
+    Promise.all([resolveSessionUrl(session), resolveBiosUrl()]).then(function (res) {
+      startEmulator(res[0], session.name, res[1], session.core || getCoreFor(sys));
+    }).catch(function (e) {
+      console.error(e);
+      removeKey(LS.session);
+      toast(e && e.message ? e.message : 'Falha ao carregar o jogo.', 'err');
+      showHub();
+    });
+  }
+
+  function startPlayer() {
+    var session = readJSON(LS.session);
+    if (!session || !session.system) { showHub(); return; }
+    var sys = findSystem(session.system) ||
+      { id: session.system, name: session.system, short: session.system, defaultCore: session.core, cores: [], extensions: [] };
+    currentSystem = sys;
+    if (sys.kind === 'external') { openExternal(sys, null); return; }
+    bootPlayer(session, sys);
+  }
+
+  function showPlayer(session, sys) {
+    hide(el('view-hub'));
+    hide(el('view-system'));
+    show(el('view-player'));
+    show(el('btn-home'));
+    el('player-name').textContent = session.name || '—';
+    var label = sys.short || getCoreFor(sys) || '—';
+    var coreEl = el('player-core');
+    if (coreEl) coreEl.querySelector('.core-label').textContent = label;
+    window.scrollTo(0, 0);
+  }
+
+  function bootOverlay(msg) {
+    el('boot-msg').textContent = msg;
+    show(el('boot-overlay'));
+  }
+  function hideBootOverlay() { hide(el('boot-overlay')); }
+
+  function resolveSessionUrl(session) {
+    if (session.source === 'url') {
+      // Baixa pelo servidor (contorna CORS/COEP de hosts sem CORS) ou direto.
+      if (session.proxy) {
+        return Promise.resolve(getApiBase() + '/api/rom?url=' + encodeURIComponent(session.url));
+      }
+      return Promise.resolve(toAbs(session.url));
+    }
+    var keys = session.keys || [];
+    return Promise.all(keys.map(function (k) { return idbGet(k.key); })).then(function (blobs) {
+      var urls = [];
+      for (var i = 0; i < blobs.length; i++) {
+        if (!blobs[i]) throw new Error('Arquivo não encontrado (armazenamento limpo?).');
+        urls.push(URL.createObjectURL(blobs[i]));
+      }
+      return urls.length === 1 ? urls[0] : urls;
+    });
+  }
+
+  function resolveBiosUrl() {
+    var bios = getBios();
+    if (!bios) return Promise.resolve(null);
+    if (bios.source === 'url') return Promise.resolve(toAbs(bios.url));
+    return idbGet(bios.key).then(function (blob) { return blob ? URL.createObjectURL(blob) : null; });
+  }
+
+  function injectLoader(onFail) {
+    var s = document.createElement('script');
+    s.src = EJS_CDN + 'loader.js';
+    s.onerror = function () {
+      var s2 = document.createElement('script');
+      s2.src = EJS_CDN_FALLBACK + 'loader.js';
+      s2.onerror = onFail;
+      document.head.appendChild(s2);
+    };
+    document.head.appendChild(s);
+  }
+
+  // Núcleos do EmulatorJS que EXIGEM threads (SharedArrayBuffer). Sem isso o
+  // PSP (PPSSPP) nem inicia ("This core requires threads"). O backend envia
+  // COOP/COEP em /play.html para permitir SharedArrayBuffer. Para os demais
+  // núcleos deixamos o padrão (desligado) — alguns não têm variante *-thread
+  // no CDN e tentar usá-la resultaria em erro de download do core.
+  var THREAD_REQUIRED_CORES = { psp: true, dos: true };
+
+  function startEmulator(gameUrl, gameName, biosUrl, core) {
+    var needsThreads = THREAD_REQUIRED_CORES[core] === true;
+    window.EJS_threads = needsThreads ? true : undefined;
+    if (needsThreads && !(typeof self !== 'undefined' && self.crossOriginIsolated)) {
+      var contexto = (typeof self !== 'undefined') && self.isSecureContext;
+      var dica = contexto
+        ? 'A página precisa de cross-origin isolation: reinicie o servidor para enviar os cabeçalhos COOP/COEP.'
+        : 'Este núcleo exige um contexto <b>seguro</b>. Abra por <b>https://</b> (rode <code>npm run cert</code> e use <code>https://SEU-IP:3443/play.html</code>) ou por <code>http://localhost:3000</code>.';
+      toast('O núcleo <b>' + escapeHtml(core) + '</b> (PSP/DOS) precisa de <b>threads</b> (SharedArrayBuffer). ' + dica, 'warn');
+    }
+    window.EJS_player = '#game';
+    window.EJS_core = core || 'psx';
+    window.EJS_gameUrl = gameUrl;
+    window.EJS_gameName = gameName;
+    window.EJS_pathtodata = EJS_CDN;
+    window.EJS_startOnLoaded = true;
+    window.EJS_biosUrl = biosUrl || '';
+    injectLoader(function () {
+      el('boot-msg').textContent = 'Falha ao carregar o EmulatorJS (CDN).';
+    });
+
+    // Esconde o overlay quando o canvas do emulador aparecer.
+    var tries = 0;
+    (function waitCanvas() {
+      if (document.querySelector('#game canvas')) { hideBootOverlay(); return; }
+      if (++tries > 400) { hideBootOverlay(); return; } // ~40s
+      setTimeout(waitCanvas, 100);
+    })();
+  }
+
+  function changeGame() {
+    if (NP.roomId) npLeave(false);
+    var session = readJSON(LS.session);
+    if (session && session.source === 'idb' && session.keys) session.keys.forEach(function (k) { idbDel(k.key); });
+    removeKey(LS.session);
+    var sys = session && findSystem(session.system);
+    el('game').innerHTML = '';
+    if (sys) openSystem(sys.id); else showHub();
+  }
+
+  // ---------------------------------------------------------------- server UI
+  function connectTo(server) {
+    setApiBase(server);
+    updateServerStatus();
+    toast('Conectando a <b>' + escapeHtml(serverLabel()) + '</b>…');
+    checkBackend().then(loadSystems).then(function () {
+      refreshBiosUI();
+      toast('Conectado.', 'ok');
+    }).catch(function () { toast('Servidor indisponível.', 'err'); });
+  }
+
+  function openSystem(id) {
+    var sys = findSystem(id);
+    if (!sys) { toast('Console não encontrado.', 'err'); return; }
+    currentSystem = sys;
+    renderSystemView(sys);
+    if (el('game-filter')) el('game-filter').value = '';
+    hide(el('view-hub'));
+    show(el('view-system'));
+    hide(el('view-player'));
+    show(el('btn-home'));
+    loadGames(sys);
+    window.scrollTo(0, 0);
+  }
+
+  // ================================================== DESCOBERTA DE SERVIDORES
+  function runDiscovery() {
+    var btn = el('btn-discover');
+    var status = el('discover-status');
+    var list = el('discover-list');
+    if (btn) btn.disabled = true;
+    if (status) status.textContent = 'Procurando servidores na rede… (alguns segundos)';
+    if (list) list.innerHTML = '<div class="empty">Sondando a rede…</div>';
+    api('/api/discover?timeout=450').then(function (r) {
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return r.json();
+    }).then(function (j) {
+      renderDiscovered(j);
+      if (status) {
+        var n = (j.servers || []).length;
+        status.textContent = n + (n === 1 ? ' servidor encontrado' : ' servidores encontrados') +
+          ' em ' + (Math.round((j.durationMs || 0) / 100) / 10) + 's';
+      }
+    }).catch(function (e) {
+      if (status) status.textContent = 'Falha na busca: ' + (e && e.message ? e.message : e);
+      if (list) list.innerHTML = '<div class="empty">Não foi possível buscar os servidores.</div>';
+    }).finally(function () {
+      if (btn) btn.disabled = false;
+    });
+  }
+
+  function renderDiscovered(j) {
+    var list = el('discover-list');
+    if (!list) return;
+    list.innerHTML = '';
+    var servers = j.servers || [];
+    if (!servers.length) {
+      list.innerHTML = '<div class="empty">Nenhum servidor encontrado. Confira se os aparelhos estão na mesma rede (Wi-Fi).</div>';
+      return;
+    }
+    servers.forEach(function (s) {
+      var item = document.createElement('div');
+      item.className = 'list-item srv-item';
+
+      var top = document.createElement('div');
+      top.className = 'top';
+
+      var meta = document.createElement('div');
+      meta.className = 'meta';
+      var withGames = (s.systems || []).filter(function (x) { return x.count > 0; });
+      meta.innerHTML = '<b>' + escapeHtml(s.name || 'WebEMU') + (s.self ? ' · este aparelho' : '') + '</b>' +
+        '<span>' + escapeHtml(s.url) + ' · ' + withGames.length + ' consoles · ' + (s.games || 0) + ' jogos' +
+        (s.https ? ' · HTTPS' : '') + '</span>';
+
+      var use = document.createElement('button');
+      use.type = 'button';
+      use.className = 'btn sm primary';
+      use.textContent = s.self ? 'É este' : 'Usar';
+      if (s.self) use.disabled = true;
+      use.addEventListener('click', function () {
+        connectTo(s.url);
+        el('server-panel').classList.add('hidden');
+      });
+
+      top.appendChild(meta);
+      top.appendChild(use);
+      item.appendChild(top);
+
+      if (withGames.length) {
+        var chips = document.createElement('div');
+        chips.className = 'srv-consoles';
+        chips.innerHTML = withGames.map(function (x) {
+          return '<span class="srv-chip">' + escapeHtml(x.icon || '🎮') + ' ' +
+            escapeHtml(x.short || x.name) + ' <b>' + (x.count || 0) + '</b></span>';
+        }).join('');
+        item.appendChild(chips);
+      }
+      list.appendChild(item);
+    });
+  }
+
+  // ======================================================== NETPLAY (LAN) ===
+  // O host emula e transmite (canvas.captureStream -> WebRTC); os convidados
+  // recebem o vídeo e mandam os comandos pelo data channel. A sinalização usa
+  // o WebSocket /signaling do próprio backend (LAN, sem servidor externo).
+  var NP = {
+    ws: null,
+    name: readJSON(LS.npName) || '',
+    roomId: null,
+    isHost: false,
+    myId: null,
+    myPlayerIndex: 0,
+    peers: {},        // peerId -> { pc, dc, iceQueue, connected, retries, playerIndex, name }
+    players: [],      // lista exibida na sala
+    meta: null,
+    summary: null,
+    localStream: null,
+    remoteStream: null,
+    audioDest: null,
+    pendingJoin: null,
+    pendingWs: null,   // conexão WebSocket em andamento (evita abrir duas)
+    iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
+  };
+
+  // Servidores ICE (STUN/TURN) para o WebRTC atravessar a NAT. Vêm do backend
+  // (/api/netplay/ice) — assim dá para apontar um TURN próprio pela internet.
+  var iceLoaded = false;
+  function loadIceServers() {
+    if (iceLoaded || !netplayAvailable) return;
+    iceLoaded = true;
+    api('/api/netplay/ice').then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (j) {
+        if (j && Array.isArray(j.iceServers) && j.iceServers.length) NP.iceServers = j.iceServers;
+      })
+      .catch(function () {});
+  }
+
+  // Índices de botão do RetroArch usados pelo EmulatorJS (confirmados no core):
+  // B=0 Y=1 SELECT=2 START=3 UP=4 DOWN=5 LEFT=6 RIGHT=7 A=8 X=9 L=10 R=11
+  var NP_KEYS = {
+    arrowup: 4, arrowdown: 5, arrowleft: 6, arrowright: 7,
+    z: 8, x: 0, a: 9, s: 1, enter: 3, shift: 2, q: 10, e: 11
+  };
+
+  function npWsUrl() {
+    var base = getApiBase();
+    if (!base && IS_FILE) return 'ws://localhost:3000/signaling';
+    var u;
+    try { u = new URL(base || location.href, location.href); } catch (e) { return null; }
+    var protocol = (u.protocol === 'https:' ? 'wss:' : 'ws:');
+    var host = u.host;
+    // Anexa token se definido (para túnel público com proteção)
+    var qs = '';
+    if (accessToken) qs = (host.includes('?') ? '&' : '?') + 'token=' + encodeURIComponent(accessToken);
+    return protocol + '//' + host + '/signaling' + qs;
+  }
+
+  function npConnect() {
+    if (NP.ws && NP.ws.readyState === 1) return Promise.resolve(NP.ws);
+    if (NP.pendingWs) return NP.pendingWs;
+    NP.pendingWs = new Promise(function (resolve, reject) {
+      var url = npWsUrl();
+      if (!url) { NP.pendingWs = null; reject(new Error('Servidor de netplay indisponível.')); return; }
+      var ws;
+      try { ws = new WebSocket(url); } catch (e) { NP.pendingWs = null; reject(e); return; }
+      var settled = false;
+      var timer = setTimeout(function () {
+        if (settled) return; settled = true;
+        NP.pendingWs = null;
+        try { ws.close(); } catch (e) {}
+        reject(new Error('Tempo esgotado ao conectar no netplay.'));
+      }, 6000);
+      ws.onopen = function () {
+        if (settled) return; settled = true;
+        clearTimeout(timer); NP.pendingWs = null; NP.ws = ws; resolve(ws);
+      };
+      ws.onerror = function () {
+        if (settled) return; settled = true;
+        clearTimeout(timer); NP.pendingWs = null;
+        reject(new Error('Não foi possível abrir o netplay (servidor sem WebSocket).'));
+      };
+      ws.onclose = function () { if (NP.ws === ws) NP.ws = null; NP.pendingWs = null; };
+      ws.onmessage = npOnMessage;
+    });
+    return NP.pendingWs;
+  }
+
+  function npSend(obj) {
+    if (NP.ws && NP.ws.readyState === 1) { try { NP.ws.send(JSON.stringify(obj)); } catch (e) {} }
+  }
+
+  function npSetStatus(txt) { var s = el('np-status'); if (s) s.textContent = txt; }
+
+  function npRandomCode() {
+    var abc = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    var out = '';
+    for (var i = 0; i < 5; i++) out += abc.charAt(Math.floor(Math.random() * abc.length));
+    return out;
+  }
+
+  function npShareLink(code) {
+    var base = getApiBase() || serverPublicUrl || serverLanUrl || (IS_FILE ? 'http://localhost:3000' : location.origin);
+    var url = String(base).replace(/\/+$/, '') + '/play.html?room=' + encodeURIComponent(code);
+    if (accessToken) url += '&token=' + encodeURIComponent(accessToken);
+    return url;
+  }
+
+  function npPlayerName() {
+    var input = el('np-name');
+    var name = ((input && input.value) || '').trim() || NP.name || '';
+    if (!name) name = 'Jogador';
+    NP.name = name;
+    writeJSON(LS.npName, name);
+    return name;
+  }
+
+  // ---------------------------------------------------- mensagens do servidor
+  function npOnMessage(ev) {
+    var m;
+    try { m = JSON.parse(ev.data); } catch (e) { return; }
+    var p = m.payload || {};
+    switch (m.type) {
+      case 'room-list':
+        if (!NP.roomId) npRenderRooms(p.rooms || []);
+        break;
+      case 'peer-list':
+        npOnPeerList(p);
+        break;
+      case 'peer-joined':
+        npOnPeerJoined(p);
+        break;
+      case 'peer-left':
+        npOnPeerLeft(p);
+        break;
+      case 'room-update':
+        if (p.metadata) NP.meta = p.metadata;
+        if (p.summary) NP.summary = p.summary;
+        npRenderRoom();
+        break;
+      case 'chat':
+        npAppendChat(p.name, p.text, p.playerIndex === NP.myPlayerIndex);
+        break;
+      case 'offer':
+        npGuestOnOffer(p.fromId, p.sdp);
+        break;
+      case 'answer':
+        npHostOnAnswer(p.fromId, p.sdp);
+        break;
+      case 'ice-candidate':
+        npOnIce(p.fromId, p.candidate);
+        break;
+      case 'kicked':
+        toast('Você foi removido da sala.', 'warn');
+        npLeave(true);
+        break;
+      case 'room-closed':
+        toast('O host encerrou a sala.', 'warn');
+        npLeave(true);
+        break;
+      case 'error':
+        if (NP.pendingJoin && /senha/i.test(p.message || '')) {
+          var rid = NP.pendingJoin;
+          NP.pendingJoin = null;
+          var pass = window.prompt('Senha da sala:');
+          if (pass !== null) npJoinRoom(rid, pass);
+          return;
+        }
+        NP.pendingJoin = null;
+        if (!NP.myId) NP.roomId = null;
+        toast('Netplay: ' + escapeHtml(p.message || 'erro'), 'err');
+        break;
+    }
+  }
+
+  function npOnPeerList(p) {
+    NP.myId = p.yourId;
+    NP.myPlayerIndex = p.yourPlayerIndex || 0;
+    if (p.metadata) NP.meta = p.metadata;
+    if (p.room) NP.summary = p.room;
+    NP.roomId = (p.room && p.room.roomId) || NP.roomId;
+    var list = (p.peers || []).map(function (x) {
+      return { id: x.id, playerIndex: x.playerIndex, name: x.name || x.metadata && x.metadata.name };
+    });
+    list.push({ id: p.yourId, playerIndex: NP.myPlayerIndex, name: NP.isHost ? (NP.meta && NP.meta.host) || NP.name : NP.name });
+    NP.players = list.sort(function (a, b) { return a.playerIndex - b.playerIndex; });
+    NP.pendingJoin = null;
+    npRenderRoom();
+    if (!NP.isHost) npShowGuest();
+    npAppendChat('', 'Você entrou na sala ' + NP.roomId + '.', false, true);
+  }
+
+  function npOnPeerJoined(p) {
+    if (!NP.peers[p.id]) NP.peers[p.id] = {};
+    NP.peers[p.id].playerIndex = p.playerIndex;
+    NP.peers[p.id].name = p.name;
+    NP.players = NP.players.filter(function (x) { return x.id !== p.id; });
+    NP.players.push({ id: p.id, playerIndex: p.playerIndex, name: p.name });
+    NP.players.sort(function (a, b) { return a.playerIndex - b.playerIndex; });
+    npRenderRoom();
+    npAppendChat('', (p.name || 'Jogador ' + (p.playerIndex + 1)) + ' entrou na sala.', false, true);
+    if (NP.isHost) {
+      npHostStartStream().then(function () { npHostCreateOffer(p.id); })
+        .catch(function (e) { toast('Falha ao transmitir: ' + escapeHtml(e && e.message ? e.message : e), 'err'); });
+    }
+  }
+
+  function npOnPeerLeft(p) {
+    var e = NP.peers[p.id];
+    if (e && e.pc) { try { e.pc.close(); } catch (err) {} }
+    delete NP.peers[p.id];
+    NP.players = NP.players.filter(function (x) { return x.id !== p.id; });
+    npRenderRoom();
+    if (p.wasHost) { toast('O host saiu da sala.', 'warn'); npLeave(true); }
+  }
+
+  // -------------------------------------------------------------- entrar/sair
+  function npCreateRoom() {
+    if (NP.roomId) { toast('Você já está numa sala.', 'warn'); return; }
+
+    var name = npPlayerName();
+    var code = npRandomCode();
+    var roomName = ((el('np-room-name') && el('np-room-name').value) || '').trim() || 'Sala';
+
+    var pass = (el('np-room-pass') && el('np-room-pass').value) || '';
+    var isPrivate = !!(el('np-private') && el('np-private').checked);
+
+    // Verifica qual modo está selecionado (URL ou Lobby)
+    var useUrlMode = !!(el('np-url-mode') && el('np-url-mode').checked);
+
+    NP.isHost = true;
+    NP.roomId = code;
+    npSetStatus('Criando sala…');
+
+    if (useUrlMode) {
+      // Modo URL: gera oferta SDP e monta link para compartilhar
+      npSetStatus('Gerando oferta de conexão…');
+      npUrlCreateOffer().then(function (result) {
+        NP.npUrlCode = code;
+        NP.npUrlSdp = result.sdp;
+        NP.npPeerConnection = result.peerConnection;
+
+        // Monta o link: room + sdp base64
+        var shareUrl = window.location.origin + '/play.html?room=' + code + '&sdp=' + result.sdp;
+
+        // Exibe o link para copiar
+        el('np-url-share').value = shareUrl;
+        el('np-url-link-row').style.display = 'block';
+
+        npSetStatus('Sala URL criada! Código: ' + code);
+        toast('Sala URL criada! Compartilhe o link abaixo:', 'info');
+
+        // Define evento do botão copiar
+        if (!el('btn-np-copy-url-created')) {
+          el('btn-np-copy-url-created') = true;
+          el('btn-np-copy-url').replaceWith(function () {
+            var btn = document.createElement('button');
+            btn.id = 'btn-np-copy-url-created';
+            btn.className = 'btn sm tiny';
+            btn.style.margin = '4px 0 0 4px';
+            btn.textContent = '🔗';
+            btn.addEventListener('click', function () {
+              el('np-url-share').select();
+              document.execCommand('copy');
+              toast('Link copiado!', 'sucess');
+            });
+            return btn;
+          });
+        }
+
+        npSetStatus('Sala aberta - esperando convidado pelo link.');
+      }).catch(function (e) {
+        npSetStatus('Erro ao gerar oferta.');
+        toast('Erro ao gerar oferta de conexão: ' + (e && e.message ? e.message : e), 'err');
+      });
+    } else {
+      // Modo Lobby (WebSocket) - comportamento antigo
+      NP.isHost = true;
+      NP.roomId = code;
+      npConnect().then(function () {
+        npSend({
+          type: 'join',
+          payload: {
+            roomId: code, playerIndex: 0, password: pass,
+            metadata: {
+              name: roomName, system: 'snes', systemName: 'SNES',
+              gameName: '', host: name, public: !isPrivate, maxPlayers: 4, started: false
+            }
+          }
+        });
+        npSetStatus((isPrivate ? 'Sala privada ' : 'Sala ') + code + ' aberta');
+      }).catch(function (e) {
+        NP.roomId = null; NP.isHost = false;
+        npSetStatus('Sem conexão');
+        toast(escapeHtml(e && e.message ? e.message : e), 'err');
+      });
+    }
+  }
+
+  function npJoinRoom(roomId, password) {
+    if (NP.roomId) npLeave(true);
+    if (!netplayAvailable) { toast('Netplay indisponível neste servidor.', 'warn'); return; }
+    NP.isHost = false;
+    NP.pendingJoin = roomId;
+    NP.roomId = roomId;
+    npSetStatus('Entrando em ' + roomId + '…');
+    npConnect().then(function () {
+      npSend({ type: 'join', payload: { roomId: roomId, password: password || '', metadata: { name: npPlayerName() } } });
+    }).catch(function (e) {
+      NP.pendingJoin = null; NP.roomId = null;
+      npSetStatus('Sem conexão');
+      toast(escapeHtml(e && e.message ? e.message : e), 'err');
+    });
+  }
+
+  function npLeave(fromRemote) {
+    if (!fromRemote) npSend({ type: 'leave' });
+    for (var id in NP.peers) {
+      var e = NP.peers[id];
+      if (e && e.pc) { try { e.pc.close(); } catch (err) {} }
+    }
+    NP.peers = {};
+    if (NP.localStream) NP.localStream.getTracks().forEach(function (t) { try { t.stop(); } catch (err) {} });
+    NP.localStream = null;
+    if (NP.remoteStream) NP.remoteStream.getTracks().forEach(function (t) { try { t.stop(); } catch (err) {} });
+    NP.remoteStream = null;
+
+    var wasGuest = !NP.isHost && NP.roomId;
+    NP.roomId = null; NP.isHost = false; NP.meta = null; NP.summary = null; NP.players = [];
+
+    var v = el('np-video'); if (v) v.srcObject = null;
+    hide(el('np-stage')); hide(el('np-pad')); hide(el('np-badge'));
+    hide(el('btn-np-exit')); show(el('btn-restart')); show(el('btn-change'));
+    if (el('np-room-view')) el('np-room-view').classList.add('hidden');
+    if (el('np-lobby-view')) el('np-lobby-view').classList.remove('hidden');
+    if (el('np-chat')) el('np-chat').innerHTML = '';
+    npSetStatus('Fora da sala');
+    if (wasGuest && el('view-player') && !el('view-player').classList.contains('hidden')) showHub();
+  }
+
+  function npOpenLobby() {
+    el('lobby-panel').classList.remove('hidden');
+    if (el('np-name') && !el('np-name').value) el('np-name').value = NP.name || '';
+    if (!netplayAvailable) { npSetStatus('Netplay indisponível (servidor sem WebSocket)'); return; }
+    npSetStatus('Conectando…');
+    npConnect().then(function () {
+      npSend({ type: 'lobby-subscribe' });
+      npSetStatus('Conectado · escolha uma sala ou crie a sua');
+    }).catch(function (e) {
+      npSetStatus('Sem conexão com o netplay');
+      toast(escapeHtml(e && e.message ? e.message : e), 'err');
+    });
+  }
+
+  // ---------------------------------------------------------------- interface
+  function npRenderRooms(rooms) {
+    var box = el('np-rooms');
+    if (!box) return;
+    if (!rooms || !rooms.length) { box.innerHTML = '<div class="empty">Nenhuma sala aberta. Crie a sua!</div>'; return; }
+    box.innerHTML = '';
+    rooms.forEach(function (r) {
+      var item = document.createElement('div');
+      item.className = 'list-item';
+      var meta = document.createElement('div');
+      meta.className = 'meta';
+      meta.innerHTML = '<b>' + escapeHtml(r.name || r.roomId) + (r.hasPassword ? ' 🔒' : '') + '</b>' +
+        '<span>' + escapeHtml(r.systemName || r.system || '') + (r.gameName ? ' · ' + escapeHtml(r.gameName) : '') +
+        ' · ' + r.players + '/' + r.maxPlayers + (r.host ? ' · host: ' + escapeHtml(r.host) : '') + '</span>';
+      var join = document.createElement('button');
+      join.type = 'button';
+      join.className = 'btn sm primary';
+      join.textContent = 'Entrar';
+      join.addEventListener('click', function () {
+        var pass = '';
+        if (r.hasPassword) { pass = window.prompt('Senha da sala:'); if (pass === null) return; }
+        npJoinRoom(r.roomId, pass);
+      });
+      item.appendChild(meta);
+      item.appendChild(join);
+      box.appendChild(item);
+    });
+  }
+
+  function npRenderRoom() {
+    if (!NP.roomId) return;
+    if (el('np-lobby-view')) el('np-lobby-view').classList.add('hidden');
+    if (el('np-room-view')) el('np-room-view').classList.remove('hidden');
+    if (el('np-code')) el('np-code').textContent = NP.roomId;
+    if (el('np-link')) el('np-link').innerHTML = 'Convide: <span class="lan-url">' + escapeHtml(npShareLink(NP.roomId)) + '</span>';
+
+    var list = el('np-players');
+    if (list) {
+      list.innerHTML = '';
+      NP.players.forEach(function (pl) {
+        var item = document.createElement('div');
+        item.className = 'list-item';
+        var label = (pl.playerIndex === 0 ? '👑 ' : '🎮 ') + 'Jogador ' + (pl.playerIndex + 1) +
+          (pl.name ? ' · ' + escapeHtml(pl.name) : '') + (pl.playerIndex === NP.myPlayerIndex ? ' (você)' : '');
+        var pe = NP.peers[pl.id];
+        item.innerHTML = '<div class="meta"><b>' + label + '</b><span>' +
+          (pe && pe.connected ? 'conectado' : (pl.playerIndex === NP.myPlayerIndex ? 'pronto' : 'aguardando…')) + '</span></div>';
+        if (NP.isHost && pl.playerIndex !== 0) {
+          var k = document.createElement('button');
+          k.type = 'button'; k.className = 'btn sm'; k.textContent = 'Expulsar';
+          k.addEventListener('click', function () { npSend({ type: 'kick', targetId: pl.id }); });
+          item.appendChild(k);
+        }
+        list.appendChild(item);
+      });
+    }
+    if (el('np-players-count')) {
+      el('np-players-count').textContent = NP.players.length + ' de ' + ((NP.summary && NP.summary.maxPlayers) || 4);
+    }
+    updateNpBadge();
+  }
+
+  function npAppendChat(name, text, mine, system) {
+    var box = el('np-chat');
+    if (!box || text === undefined) return;
+    var item = document.createElement('div');
+    item.className = 'list-item';
+    item.innerHTML = '<div class="meta"><span>' +
+      (system ? '' : '<b>' + escapeHtml(mine ? 'Você' : (name || '')) + ':</b> ') +
+      escapeHtml(String(text)) + '</span></div>';
+    box.appendChild(item);
+    box.scrollTop = box.scrollHeight;
+  }
+
+  function npSendChat() {
+    var input = el('np-chat-input');
+    if (!input) return;
+    var text = input.value.trim();
+    if (!text) return;
+    npSend({ type: 'chat', payload: { text: text } });
+    input.value = '';
+  }
+
+  function npCopyLink() {
+    var text = npShareLink(NP.roomId);
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(function () { toast('Link copiado!', 'ok'); })
+        .catch(function () { window.prompt('Copie o link:', text); });
+    } else {
+      window.prompt('Copie o link:', text);
+    }
+  }
+
+  function npConnectedCount() {
+    var n = 0;
+    for (var id in NP.peers) if (NP.peers[id] && NP.peers[id].connected) n++;
+    return n;
+  }
+
+  function updateNpBadge() {
+    var badge = el('np-badge');
+    if (!badge) return;
+    if (!NP.roomId) { badge.classList.add('hidden'); return; }
+    badge.classList.remove('hidden');
+    badge.className = 'badge ' + (NP.isHost ? 'ok' : '');
+    var txt = NP.isHost
+      ? 'Transmitindo' + (npConnectedCount() ? ' · ' + npConnectedCount() + ' conectado(s)' : ' · aguardando jogadores')
+      : 'Sala ' + NP.roomId + ' · jogador ' + (NP.myPlayerIndex + 1);
+    if (el('np-badge-txt')) el('np-badge-txt').textContent = txt;
+  }
+
+  function npSetGuestChrome(on) {
+    if (on) { hide(el('btn-restart')); hide(el('btn-change')); show(el('btn-np-exit')); }
+    else { show(el('btn-restart')); show(el('btn-change')); hide(el('btn-np-exit')); }
+  }
+
+  function npShowGuest() {
+    hide(el('view-hub')); hide(el('view-system'));
+    show(el('view-player')); show(el('btn-home'));
+    if (el('lobby-panel')) el('lobby-panel').classList.add('hidden');
+    if (el('player-name')) el('player-name').textContent = (NP.meta && NP.meta.gameName) || NP.roomId || 'Netplay';
+    var coreEl = el('player-core');
+    if (coreEl) coreEl.querySelector('.core-label').textContent = 'Netplay';
+    el('game').innerHTML = '';
+    npBuildStage(); npBuildPad();
+    if (el('np-stage-msg')) { el('np-stage-msg').style.display = ''; el('np-stage-msg').textContent = 'Conectando ao host…'; }
+    show(el('np-stage')); show(el('np-pad'));
+    hideBootOverlay();
+    npSetGuestChrome(true);
+    updateNpBadge();
+    window.scrollTo(0, 0);
+  }
+
+  // ------------------------------------------------------- palco e gamepad
+  function npBuildStage() {
+    if (el('np-stage')) return;
+    var wrap = document.querySelector('.game-wrap');
+    if (!wrap) return;
+    var stage = document.createElement('div');
+    stage.id = 'np-stage';
+    stage.className = 'np-stage hidden';
+    stage.innerHTML = '<video id="np-video" playsinline autoplay></video>' +
+      '<div class="np-msg" id="np-stage-msg">Conectando ao host…</div>';
+    stage.addEventListener('click', function () {
+      var v = el('np-video');
+      if (v) { var pr = v.play(); if (pr && pr.catch) pr.catch(function () {}); }
+      var msg = el('np-stage-msg');
+      if (msg && v && v.readyState >= 2) msg.style.display = 'none';
+    });
+    wrap.appendChild(stage);
+  }
+
+  function npPadButton(label, index, cls) {
+    var b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'np-btn' + (cls ? ' ' + cls : '');
+    b.textContent = label;
+    b.addEventListener('pointerdown', function (ev) { ev.preventDefault(); b.classList.add('on'); npGuestSend(index, 1); });
+    var up = function (ev) { if (ev) ev.preventDefault(); b.classList.remove('on'); npGuestSend(index, 0); };
+    b.addEventListener('pointerup', up);
+    b.addEventListener('pointercancel', up);
+    b.addEventListener('pointerleave', function () { if (b.classList.contains('on')) up(null); });
+    b.addEventListener('contextmenu', function (ev) { ev.preventDefault(); });
+    return b;
+  }
+
+  function npBuildPad() {
+    if (el('np-pad')) return;
+    var wrap = document.querySelector('.game-wrap');
+    if (!wrap) return;
+    var pad = document.createElement('div');
+    pad.id = 'np-pad';
+    pad.className = 'np-pad hidden';
+
+    var dpad = document.createElement('div');
+    dpad.className = 'np-dpad';
+    [
+      null, npPadButton('▲', 4, 'round'), null,
+      npPadButton('◀', 6, 'round'), null, npPadButton('▶', 7, 'round'),
+      null, npPadButton('▼', 5, 'round'), null
+    ].forEach(function (c) { dpad.appendChild(c || document.createElement('div')); });
+
+    var center = document.createElement('div');
+    center.className = 'np-center';
+    center.appendChild(npPadButton('SELECT', 2, 'np-pill'));
+    center.appendChild(npPadButton('START', 3, 'np-pill'));
+
+    var cluster = document.createElement('div');
+    cluster.className = 'np-cluster';
+    [
+      npPadButton('L', 10), npPadButton('R', 11),
+      npPadButton('X', 9, 'round'), npPadButton('A', 8, 'round'),
+      npPadButton('Y', 1, 'round'), npPadButton('B', 0, 'round')
+    ].forEach(function (b) { cluster.appendChild(b); });
+
+    pad.appendChild(dpad);
+    pad.appendChild(center);
+    pad.appendChild(cluster);
+    wrap.appendChild(pad);
+  }
+
+  // ------------------------------------------------------- host: transmissão
+  function npCaptureAudio() {
+    try {
+      var emu = window.EJS_emulator;
+      var ctx = null;
+      if (emu && emu.Module && emu.Module.AL && emu.Module.AL.currentCtx && emu.Module.AL.currentCtx.audioCtx) {
+        ctx = emu.Module.AL.currentCtx.audioCtx;
+      }
+      if (!ctx && emu && emu.gameManager && emu.gameManager.audioContext) ctx = emu.gameManager.audioContext;
+      if (!ctx) return null;
+      if (ctx.state !== 'running') { try { ctx.resume(); } catch (e) {} }
+      var gain = ctx.createGain();
+      gain.gain.value = 1.4;
+      var dest = ctx.createMediaStreamDestination();
+      gain.connect(dest);
+      var connected = false;
+      if (emu.gameManager && emu.gameManager.audioNode) {
+        try { emu.gameManager.audioNode.connect(gain); connected = true; } catch (e) {}
+      }
+      if (!connected && emu.Module && emu.Module.AL && emu.Module.AL.currentCtx) {
+        var al = emu.Module.AL.currentCtx;
+        if (al.gain) { try { al.gain.connect(gain); connected = true; } catch (e) {} }
+        if (!connected && al.sources) {
+          var srcs = Array.isArray(al.sources) ? al.sources : Object.keys(al.sources).map(function (k) { return al.sources[k]; });
+          srcs.forEach(function (s) { if (s && s.gain) { try { s.gain.connect(gain); connected = true; } catch (e) {} } });
+        }
+      }
+      if (!connected) return null;
+      NP.audioDest = dest;
+      return dest.stream;
+    } catch (e) {
+      console.warn('[NETPLAY] áudio:', e);
+      return null;
+    }
+  }
+
+  function npHostStartStream() {
+    if (NP.localStream) return Promise.resolve(NP.localStream);
+    var emu = window.EJS_emulator;
+    var canvas = (emu && emu.frontend && emu.frontend.canvas) || document.querySelector('#game canvas');
+    if (!canvas || !canvas.captureStream) return Promise.reject(new Error('canvas do emulador indisponível'));
+    var stream;
+    try {
+      var raw = canvas.captureStream(30);
+      stream = new MediaStream();
+      raw.getVideoTracks().forEach(function (t) {
+        try { t.contentHint = 'motion'; } catch (e) {}
+        stream.addTrack(t);
+      });
+    } catch (e) { return Promise.reject(e); }
+    var audio = npCaptureAudio();
+    if (audio) audio.getAudioTracks().forEach(function (t) { stream.addTrack(t); });
+    NP.localStream = stream;
+    return Promise.resolve(stream);
+  }
+
+  function npCreatePC(peerId, isHost) {
+    var entry = NP.peers[peerId] = NP.peers[peerId] || {};
+    if (entry.pc) { try { entry.pc.close(); } catch (e) {} }
+    var pc = new RTCPeerConnection({
+      iceServers: NP.iceServers && NP.iceServers.length ? NP.iceServers : [{ urls: 'stun:stun.l.google.com:19302' }],
+      iceCandidatePoolSize: 2
+    });
+    entry.pc = pc;
+    entry.iceQueue = entry.iceQueue || [];
+    entry.connected = false;
+
+    pc.onicecandidate = function (e) {
+      if (e.candidate) npSend({ type: 'ice-candidate', targetId: peerId, payload: { candidate: e.candidate } });
+    };
+    pc.onconnectionstatechange = function () {
+      entry.connected = pc.connectionState === 'connected';
+      if (entry.connected) entry.retries = 0;
+      npRenderRoom();
+      if (isHost && (pc.connectionState === 'failed' || pc.connectionState === 'disconnected')) {
+        entry.retries = (entry.retries || 0) + 1;
+        if (entry.retries <= 3 && NP.roomId && NP.isHost) {
+          setTimeout(function () { if (NP.roomId && NP.isHost && NP.peers[peerId]) npHostCreateOffer(peerId); }, 1500);
+        }
+      }
+    };
+
+    if (isHost) {
+      var dc = pc.createDataChannel('inputs', { ordered: true });
+      entry.dc = dc;
+      dc.onopen = function () { entry.connected = true; npRenderRoom(); };
+      dc.onmessage = npOnInput;
+      var stream = NP.localStream || new MediaStream();
+      stream.getTracks().forEach(function (t) { try { pc.addTrack(t, stream); } catch (e) {} });
+    } else {
+      pc.ondatachannel = function (e) { entry.dc = e.channel; };
+      pc.ontrack = function (e) { npGuestOnTrack(e); };
+    }
+    return pc;
+  }
+
+  function npHostCreateOffer(peerId) {
+    var pc = npCreatePC(peerId, true);
+    pc.createOffer()
+      .then(function (d) { return pc.setLocalDescription(d); })
+      .then(function () { npSend({ type: 'offer', targetId: peerId, payload: { sdp: pc.localDescription } }); })
+      .catch(function (e) { console.warn('[NETPLAY] offer:', e); });
+  }
+
+  function npHostOnAnswer(fromId, sdp) {
+    var entry = NP.peers[fromId];
+    if (!entry || !entry.pc || !sdp) return;
+    entry.pc.setRemoteDescription(new RTCSessionDescription(sdp))
+      .then(function () { npFlushIce(fromId); })
+      .catch(function (e) { console.warn('[NETPLAY] answer:', e); });
+  }
+
+  function npGuestOnOffer(fromId, sdp) {
+    if (!sdp) return;
+    var pc = npCreatePC(fromId, false);
+    pc.setRemoteDescription(new RTCSessionDescription(sdp))
+      .then(function () { return pc.createAnswer(); })
+      .then(function (d) { return pc.setLocalDescription(d); })
+      .then(function () {
+        npSend({ type: 'answer', targetId: fromId, payload: { sdp: pc.localDescription } });
+        npFlushIce(fromId);
+      })
+      .catch(function (e) { console.warn('[NETPLAY] guest offer:', e); });
+  }
+
+  function npOnIce(fromId, candidate) {
+    if (!candidate) return;
+    var entry = NP.peers[fromId] = NP.peers[fromId] || {};
+    entry.iceQueue = entry.iceQueue || [];
+    if (entry.pc && entry.pc.remoteDescription && entry.pc.remoteDescription.type) {
+      entry.pc.addIceCandidate(new RTCIceCandidate(candidate)).catch(function () {});
+    } else {
+      entry.iceQueue.push(candidate);
+    }
+  }
+
+  function npFlushIce(peerId) {
+    var entry = NP.peers[peerId];
+    if (!entry || !entry.pc) return;
+    (entry.iceQueue || []).forEach(function (c) {
+      entry.pc.addIceCandidate(new RTCIceCandidate(c)).catch(function () {});
+    });
+    entry.iceQueue = [];
+  }
+
+  function npGuestOnTrack(e) {
+    if (!NP.remoteStream) NP.remoteStream = new MediaStream();
+    NP.remoteStream.addTrack(e.track);
+    var v = el('np-video');
+    if (v) {
+      if (v.srcObject !== NP.remoteStream) v.srcObject = NP.remoteStream;
+      var pr = v.play();
+      if (pr && pr.catch) pr.catch(function () {});
+    }
+    var msg = el('np-stage-msg');
+    if (msg) msg.style.display = 'none';
+  }
+
+  function npOnInput(ev) {
+    var d;
+    try { d = JSON.parse(ev.data); } catch (e) { return; }
+    if (!d || typeof d.index !== 'number') return;
+    var emu = window.EJS_emulator;
+    if (emu && emu.gameManager && emu.gameManager.functions && emu.gameManager.functions.simulateInput) {
+      try { emu.gameManager.functions.simulateInput(d.player || 0, d.index, d.value); } catch (e) {}
+    }
+  }
+
+  function npGuestSend(index, value) {
+    if (NP.isHost || !NP.roomId) return;
+    var msg = JSON.stringify({ player: NP.myPlayerIndex, index: index, value: value });
+    for (var id in NP.peers) {
+      var e = NP.peers[id];
+      if (e && e.dc && e.dc.readyState === 'open') { try { e.dc.send(msg); } catch (err) {} }
+    }
+  }
+
+  // -------------------------------------------------------------------- init
+  function setupUI() {
+    el('btn-server-toggle').addEventListener('click', function () {
+      el('server-panel').classList.toggle('hidden');
+      el('server-input').value = getApiBase();
+    });
+    el('btn-connect').addEventListener('click', function () { setApiBase(el('server-input').value.trim()); checkBackend().then(loadSystems).then(refreshBiosUI).catch(function () {}); });
+    el('server-input').addEventListener('keydown', function (e) { if (e.key === 'Enter') el('btn-connect').click(); });
+
+    // Descoberta de servidores na rede
+    el('btn-discover').addEventListener('click', runDiscovery);
+
+    // Netplay: lobby
+    el('btn-lobby-toggle').addEventListener('click', function () {
+      var panel = el('lobby-panel');
+      if (panel.classList.contains('hidden')) npOpenLobby();
+      else panel.classList.add('hidden');
+    });
+    el('btn-np-refresh').addEventListener('click', function () {
+      npConnect().then(function () { npSend({ type: 'lobby-subscribe' }); })
+        .catch(function (e) { toast(escapeHtml(e && e.message ? e.message : e), 'err'); });
+    });
+    el('btn-np-create').addEventListener('click', npCreateRoom);
+    el('btn-np-join').addEventListener('click', function () {
+      var input = el('np-join-code');
+      var code = (input && input.value || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8);
+      if (!code) { toast('Digite o código da sala.', 'warn'); return; }
+      var pass = '';
+      npJoinRoom(code, pass);
+    });
+    el('np-join-code').addEventListener('keydown', function (e) { if (e.key === 'Enter') el('btn-np-join').click(); });
+    el('btn-np-leave').addEventListener('click', function () { npLeave(false); });
+    el('btn-np-exit').addEventListener('click', function () { npLeave(false); });
+    el('btn-np-copy').addEventListener('click', npCopyLink);
+    el('btn-np-chat').addEventListener('click', npSendChat);
+    el('np-chat-input').addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); npSendChat(); } });
+    el('np-name').addEventListener('change', function () { NP.name = el('np-name').value.trim(); writeJSON(LS.npName, NP.name); });
+
+    // Convidado: teclado -> comandos do host
+    document.addEventListener('keydown', function (e) {
+      if (NP.isHost || !NP.roomId) return;
+      if (/^(input|textarea|select)$/i.test((e.target && e.target.tagName) || '')) return;
+      var idx = NP_KEYS[(e.key || '').toLowerCase()];
+      if (idx === undefined) return;
+      e.preventDefault();
+      if (!e.repeat) npGuestSend(idx, 1);
+    });
+    document.addEventListener('keyup', function (e) {
+      if (NP.isHost || !NP.roomId) return;
+      var idx = NP_KEYS[(e.key || '').toLowerCase()];
+      if (idx === undefined) return;
+      e.preventDefault();
+      npGuestSend(idx, 0);
+    });
+
+    el('btn-home').addEventListener('click', function () {
+      if (NP.roomId) npLeave(false);
+      showHub();
+    });
+    el('btn-back-hub').addEventListener('click', showHub);
+
+    var dz = el('dropzone');
+    var input = el('rom-input');
+    dz.addEventListener('click', function () { if (!dz.classList.contains('disabled')) input.click(); });
+    input.addEventListener('change', function () { if (input.files && input.files.length) startLocal(input.files); });
+    ['dragenter', 'dragover'].forEach(function (ev) {
+      dz.addEventListener(ev, function (e) { e.preventDefault(); if (!dz.classList.contains('disabled')) dz.classList.add('drag'); });
+    });
+    ['dragleave', 'drop'].forEach(function (ev) {
+      dz.addEventListener(ev, function (e) { e.preventDefault(); dz.classList.remove('drag'); });
+    });
+    dz.addEventListener('drop', function (e) {
+      if (dz.classList.contains('disabled')) return;
+      if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length) startLocal(e.dataTransfer.files);
+    });
+
+    el('btn-refresh-games').addEventListener('click', refreshGames);
+
+    // Jogar por link (URL)
+    el('btn-rom-url').addEventListener('click', playByUrl);
+    (function () {
+      var u = el('rom-url');
+      if (u) u.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter') { e.preventDefault(); playByUrl(); }
+      });
+      var box = el('rom-url-proxy');
+      if (box) {
+        var saved = readJSON(LS.romProxy);
+        box.checked = (saved === null || saved === undefined) ? !IS_FILE : !!saved;
+        box.addEventListener('change', function () { writeJSON(LS.romProxy, box.checked); });
+      }
+    })();
+    (function () {
+      var f = el('game-filter');
+      if (f) f.addEventListener('input', filterGames);
+    })();
+    el('btn-save-dir').addEventListener('click', function () {
+      var sys = currentSystem; if (!sys) return;
+      var dir = el('dir-input').value.trim();
+      if (!dir) { toast('Informe a pasta.', 'warn'); return; }
+      var btn = el('btn-save-dir'); btn.disabled = true;
+      api('/api/config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ system: sys.id, dir: dir }) })
+        .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+        .then(function (res) {
+          if (!res.ok) throw new Error(res.j.error || 'Falha');
+          sys.dir = (res.j.dirs && res.j.dirs[sys.id]) || dir;
+          el('dir-view').textContent = sys.dir;
+          el('dir-input').value = sys.dir;
+          toast(res.j.message || 'Pasta salva.', 'ok');
+          loadGames(sys);
+        })
+        .catch(function (e) { toast('Erro: ' + escapeHtml(e && e.message ? e.message : e), 'err'); })
+        .finally(function () { btn.disabled = false; });
+    });
+
+    el('btn-open-external').addEventListener('click', function () { if (currentSystem) openExternal(currentSystem, null); });
+    el('btn-bios-file').addEventListener('click', function () { el('bios-input').click(); });
+    el('bios-input').addEventListener('change', function () { if (this.files && this.files[0]) handleBiosFile(this.files[0]); });
+
+    el('btn-change').addEventListener('click', changeGame);
+    el('btn-restart').addEventListener('click', function () { location.reload(); });
+    el('btn-fullscreen').addEventListener('click', function () {
+      var wrap = document.querySelector('.game-wrap');
+      if (document.fullscreenElement) document.exitFullscreen();
+      else if (wrap.requestFullscreen) wrap.requestFullscreen();
+    });
+  }
+
+  document.addEventListener('DOMContentLoaded', function () {
+    setupUI();
+    updateServerStatus();
+
+    var roomParam = null;
+    try { roomParam = new URLSearchParams(location.search).get('room'); } catch (e) {}
+    if (roomParam) roomParam = String(roomParam).toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8);
+
+    checkBackend()
+      .then(function () { return loadSystems(); })
+      .then(function () {
+        refreshBiosUI();
+        if (roomParam) {
+          // Convidado veio por link: abre o lobby e tenta entrar na sala.
+          if (el('np-name') && !el('np-name').value) el('np-name').value = NP.name || '';
+          npOpenLobby();
+          npJoinRoom(roomParam, '');
+        } else {
+          startPlayer();
+        }
+      })
+      .catch(function () {
+        el('brand-sub').textContent = 'Servidor offline';
+        el('systems-grid').innerHTML = '<div class="empty">Servidor indisponível. Inicie o backend e recarregue, ou clique em <b>🌐 Servidor</b> para apontar outro.</div>';
+        if (!roomParam) startPlayer();
+      });
+  });
+})();
+</script>
+</body>
+</html>

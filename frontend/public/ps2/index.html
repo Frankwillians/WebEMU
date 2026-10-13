@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>PS2 (experimental) — Play! .js</title>
+  <link href="static/css/main.css" rel="stylesheet" />
+  <style>
+    :root { color-scheme: dark; }
+    body { background: #0b1220; color: #e6edf7; }
+    .ps2-top {
+      display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+      padding: 10px 16px; background: #111a2b; border-bottom: 1px solid #22304a;
+      position: sticky; top: 0; z-index: 10;
+    }
+    .ps2-top a { color: #7cc4ff; text-decoration: none; font-weight: 600; }
+    .ps2-top a:hover { text-decoration: underline; }
+    .ps2-top .badge {
+      font-size: 11px; font-weight: 700; letter-spacing: .03em;
+      background: #3a2a00; color: #ffd479; border: 1px solid #6b5200;
+      padding: 3px 9px; border-radius: 999px;
+    }
+    .ps2-top .spacer { flex: 1; }
+    .ps2-top .name { font-size: 13px; color: #9fb0c8; max-width: 50vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .global-row { align-items: flex-start; }
+    .global-column { margin: 16px; }
+    .stage { max-width: 960px; }
+    #outputCanvas {
+      background: #000; border: 1px solid #22304a; border-radius: 10px;
+      display: block; width: 100%; outline: none;
+    }
+    #root input[type=file] {
+      margin: 12px 0 4px; color: #cfe0f5; font-size: 13px;
+    }
+    #root span.stats { color: #7cc4ff; font-size: 12px; margin-left: 8px; }
+    #ps2-status { margin-top: 10px; font-size: 13px; color: #9fb0c8; min-height: 18px; }
+    #ps2-status .err { color: #ff6b6b; }
+    .info { color: #9fb0c8; font-size: 13px; line-height: 1.65; }
+    .ps2-top .spin {
+      width: 14px; height: 14px; border-radius: 50%;
+      border: 2px solid #2b3b58; border-top-color: #7cc4ff;
+      display: inline-block; animation: ps2spin .8s linear infinite; vertical-align: -2px;
+    }
+    @keyframes ps2spin { to { transform: rotate(1turn); } }
+    @media (max-width: 820px) {
+      .global-row { flex-direction: column; }
+      .global-column { margin: 12px; }
+      .ps2-top .name { max-width: 100%; }
+    }
+  </style>
+</head>
+<body>
+  <div class="ps2-top">
+    <a href="/play.html">⬅ Voltar ao launcher</a>
+    <span class="badge">PS2 · experimental</span>
+    <span class="spacer"></span>
+    <span class="name" id="ps2-game-name"></span>
+  </div>
+
+  <div class="global-row">
+    <div class="global-column">
+      <div><canvas id="outputCanvas" width="640" height="480" tabindex="-1"></canvas></div>
+      <div id="root"></div>
+      <div id="ps2-status"></div>
+    </div>
+
+    <div class="global-column info">
+      <h1 style="font-size:20px;margin:0 0 6px;color:#e6edf7">Play!.js</h1>
+      <p>
+        Emulador de <strong>PlayStation 2</strong> em WebAssembly
+        (<a href="https://github.com/jpd002/Play-" target="_blank" rel="noreferrer" style="color:#7cc4ff">Play!</a>).
+        É <strong>experimental</strong>: a compatibilidade e a velocidade variam muito
+        e não é recomendado no celular.
+      </p>
+      <p><strong>Carregar ISO local:</strong> botão <em>Escolher arquivo</em> acima do canvas.</p>
+      <p>
+        <strong>Controles (teclado):</strong><br>
+        Direcional: setas · Analógico L: F/H/T/G · Analógico R: J/L/I/K<br>
+        □ = A · ✕ = Z · △ = S · ○ = X · Start = Enter · Select = Backspace<br>
+        L1/L2/L3 = 1/2/3 · R1/R2/R3 = 8/9/0
+      </p>
+      <p>Formatos: ISO, CSO, CHD, ISZ, BIN, ELF. <strong>Não precisa de BIOS.</strong></p>
+      <p style="font-size:12px;color:#6f8199">
+        Play! © Jean-Philip Desjardins — licença BSD (ver <code>NOTICE.txt</code>).
+      </p>
+    </div>
+  </div>
+
+  <script defer src="static/js/main.js"></script>
+  <script defer src="lan.js"></script>
+</body>
+</html>
