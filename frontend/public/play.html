@@ -1978,8 +1978,10 @@
     item.innerHTML = '<div class="meta"><span>' +
       (system ? '' : '<b>' + escapeHtml(mine ? 'Você' : (name || '')) + ':</b> ') +
       escapeHtml(String(text)) + '</span></div>';
-    box.appendChild(item);
-    box.scrollTop = box.scrollHeight;
+    // Mensagem mais recente sempre no TOPO (não precisa rolar para baixo).
+    if (box.firstChild) box.insertBefore(item, box.firstChild);
+    else box.appendChild(item);
+    box.scrollTop = 0;
   }
 
   function npSendChat() {
