@@ -248,40 +248,24 @@
   <p class="hint">Procura outras instâncias do WebEMU na sua rede local (Wi-Fi/Ethernet) e mostra <strong>quais consoles e quantos jogos</strong> cada uma tem. Clique em <strong>Usar</strong> para jogar pelo servidor de outro PC.</p>
 
   <details style="margin-top:12px;border:1px solid #223148;border-radius:10px;padding:8px 11px;background:#0e1624">
-    <summary style="cursor:pointer;font-weight:600;color:#67e8f9">🌍 Como jogar online / por que a busca não acha nada</summary>
+    <summary style="cursor:pointer;font-weight:600;color:#67e8f9">🏠 Como usar os jogos de outro PC (mesma rede)</summary>
     <div style="padding:8px 2px">
-      <p class="hint"><b>Por que "Buscar servidores na rede" não funciona quando abro pelo Vercel?</b><br>
-      Quem varre a sua rede é o <b>servidor</b>, nunca o navegador (os navegadores bloqueiam isso por segurança). Ao abrir este site pelo endereço do Vercel, a varredura roda no datacenter da Vercel — que <b>não está na sua casa</b>, então nunca encontra seus PCs.</p>
-
-      <p class="hint"><b>A solução — um endereço HTTPS para o PC que tem os jogos:</b></p>
-      <table class="hint" style="width:100%;border-collapse:collapse;margin:6px 0">
-        <tr style="color:#67e8f9"><td style="padding:3px 6px"><b>Serviço</b></td><td style="padding:3px 6px"><b>Como faz</b></td><td style="padding:3px 6px"><b>Endereço</b></td></tr>
-        <tr><td style="padding:3px 6px">⭐ <b>Cloudflare</b> (mais fácil)</td><td style="padding:3px 6px"><code>winget install Cloudflare.cloudflared</code> depois <code>cloudflared tunnel --url http://localhost:3000</code></td><td style="padding:3px 6px">HTTPS grátis, sem conta</td></tr>
-        <tr><td style="padding:3px 6px">🔒 <b>Tailscale</b> (mais seguro)</td><td style="padding:3px 6px">instala nos dois PCs, entra na mesma rede, depois <code>tailscale serve https / http://localhost:3000</code></td><td style="padding:3px 6px"><code>https://nomedopc.tailnet.ts.net</code> — <b>fixo</b></td></tr>
-        <tr><td style="padding:3px 6px">🎮 <b>Playit.gg</b></td><td style="padding:3px 6px">instala e roda um agente</td><td style="padding:3px 6px">endereço grátis próprio</td></tr>
-        <tr><td style="padding:3px 6px"><b>ngrok</b></td><td style="padding:3px 6px"><code>ngrok http 3000</code></td><td style="padding:3px 6px">HTTPS grátis (conta)</td></tr>
-      </table>
-
-      <p class="hint"><b>Passo a passo com o Cloudflare (recomendado):</b></p>
-      <ol class="hint" style="padding-left:18px;margin:6px 0">
-        <li>No PC com os jogos, rode: <code>node src/backend/server.js</code></li>
-        <li>Em outra janela do PowerShell, rode: <code>cloudflared tunnel --url http://localhost:3000</code></li>
-        <li>Ele imprime um endereço tipo <code>https://abc-123.trycloudflare.com</code></li>
-        <li>Clique em <b>🔗 Copiar link de acesso</b> acima — o link já vem com <code>?server=</code> pronto</li>
-        <li><b>Todo mundo abre esse link</b> e conecta sozinho (celular ou PC)</li>
-      </ol>
-
-      <p class="hint">Abrindo por esse endereço, <b>tudo passa a funcionar junto</b>, inclusive com amigos de outras casas:</p>
+      <p class="hint">Este painel serve <b>apenas para a sua rede local</b> (mesmo Wi-Fi/Ethernet). Ele faz duas coisas:</p>
       <ul class="hint" style="padding-left:18px;margin:6px 0">
-        <li>🔍 <b>Buscar servidores na rede</b> — a varredura acontece no PC do host, que está na sua rede</li>
-        <li>🎮 <b>Jogar</b> — as ROMs vêm do PC do host pelo túnel</li>
-        <li>👥 <b>Netplay / salas</b> — o WebSocket <code>wss://…/signaling</code> atravessa o túnel</li>
+        <li>🔍 <b>Buscar servidores na rede</b> — acha outros PCs com o WebEMU ligado na mesma rede e mostra <b>quais consoles e quantos jogos</b> cada um tem. Clique em <b>Usar</b> para jogar pelos arquivos daquele PC.</li>
+        <li>🌐 <b>Conectar pelo endereço</b> — digite <code>http://192.168.0.5:3000</code> (o IP do PC que tem os jogos) e clique em <b>Conectar</b>. Ou use <b>📋 Colar</b>.</li>
       </ul>
 
-      <p class="hint">Se preferir continuar pelo site do Vercel, cole a URL do túnel no campo <b>🌐 Servidor</b> acima e clique em <b>Conectar</b>. (Não funciona com <code>http://192.168.…</code> porque o navegador bloqueia conteúdo HTTP dentro de página HTTPS.)</p>
+      <p class="hint"><b>Por que às vezes não acha nada?</b></p>
+      <ul class="hint" style="padding-left:18px;margin:6px 0">
+        <li>Os dois aparelhos precisam estar no <b>mesmo Wi-Fi</b> (alguns roteadores têm "isolamento de clientes" que bloqueia isso)</li>
+        <li>O PC com os jogos precisa estar com o <code>node src/backend/server.js</code> rodando</li>
+        <li>O <b>Firewall do Windows</b> pode estar bloqueando — libere o Node.js na rede privada</li>
+      </ul>
 
-      <p class="hint"><b>Na mesma rede (LAN), sem túnel:</b> abra direto <code>http://IP-DO-PC:3000/play.html</code> — a busca e o netplay funcionam na hora.</p>
-      <p class="hint">⚠️ O túnel só fica ativo enquanto o PC do host estiver ligado e o comando rodando.</p>
+      <p class="hint">💡 <b>Dica para o celular:</b> rode a busca e toque em <b>Usar</b>, ou escaneie/digite o IP mostrado acima. O endereço completo é <code>http://IP:3000/play.html</code>.</p>
+
+      <p class="hint">👉 <b>Quer jogar com amigos de outras casas (pela internet)?</b> Use a aba <b>👥 Jogar em rede</b> — é lá que ficam a criação de sala e o link de convite.</p>
     </div>
   </details>
 </section>
@@ -289,7 +273,7 @@
 <!-- NETPLAY / LOBBY PANEL -->
 <section id="lobby-panel" class="panel hidden">
   <div class="row between">
-    <strong>👥 Jogar em rede (LAN)</strong>
+    <strong>👥 Jogar em rede</strong>
     <span class="hint" id="np-status" style="margin:0">—</span>
   </div>
 
@@ -303,7 +287,7 @@
       <input id="np-join-code" class="input" type="text" maxlength="8" placeholder="Código da sala (ex.: ABC12)" spellcheck="false" style="max-width:220px; text-transform:uppercase" />
       <button id="btn-np-join" class="btn sm" type="button">Entrar por código</button>
     </div>
-    <p class="hint">Entre numa sala aberta ou crie a sua. Para <strong>criar</strong>, inicie um jogo primeiro — o jogo roda no seu aparelho (host) e é transmitido aos convidados.</p>
+    <p class="hint">Crie a sala ou entre numa existente. Pode criar <strong>antes mesmo de escolher o jogo</strong> — quando o host iniciar uma partida, ela aparece para todos os convidados.</p>
     <div id="np-rooms" class="list"><div class="empty">Nenhuma sala aberta.</div></div>
     <div class="row" style="margin-top:8px">
       <input id="np-room-name" class="input" type="text" placeholder="Nome da sala (opcional)" spellcheck="false" />
@@ -312,6 +296,55 @@
       <button id="btn-np-create" class="btn sm primary" type="button">➕ Criar sala</button>
     </div>
     <p class="hint">Os convidados entram pelo <strong>código</strong> ou pelo link. Salas <strong>privadas</strong> não aparecem na lista pública — só entram quem tem o código/link.</p>
+
+    <div class="row" style="margin-top:8px">
+      <span class="hint" style="margin:0"><b>Sinalizador:</b></span>
+      <label class="hint" style="display:flex;align-items:center;gap:6px;margin:0;cursor:pointer"><input type="radio" id="np-ws-lan" name="np-ws" value="lan" checked /> 🏠 LAN (PC local)</label>
+      <label class="hint" style="display:flex;align-items:center;gap:6px;margin:0;cursor:pointer"><input type="radio" id="np-ws-online" name="np-ws" value="online" /> 🌐 Online (Vercel)</label>
+      <button id="btn-np-test-ws" class="btn sm" type="button">🔌 Testar conexão</button>
+    </div>
+    <p class="hint" id="np-ws-hint" style="margin:4px 0 0 0">🏠 Modo LAN: a sala funciona na sua rede (Wi-Fi). 🌐 Modo Online: a sala fica acessível pela internet pelo endpoint WebSocket da Vercel.</p>
+
+    <div class="row" style="margin-top:8px">
+      <button id="btn-np-invite" class="btn sm" type="button">🔗 Copiar link de convite</button>
+      <span class="hint" id="np-invite-status" style="margin:0"></span>
+    </div>
+    <p class="hint">Na <b>mesma rede</b> está pronto: o amigo abre o link e joga. Em <b>🌐 Online</b> o convidado entra de qualquer lugar — o link já carrega o modo certo.</p>
+
+    <details style="margin-top:12px;border:1px solid #223148;border-radius:10px;padding:8px 11px;background:#0e1624">
+      <summary style="cursor:pointer;font-weight:600;color:#67e8f9">🌍 Jogar online com amigos de outras casas</summary>
+      <div style="padding:8px 2px">
+        <p class="hint"><b>Mesma rede (LAN):</b> marque <b>🏠 LAN</b>, crie a sala, clique em <b>🔗 Copiar link de convite</b> e mande o link. O amigo abre e joga.</p>
+
+        <p class="hint"><b>Amigo em outra casa — opção 1 (mais fácil, sem instalar nada):</b><br>
+        Marque <b>🌐 Online (Vercel)</b> acima. O sinalizador passa a ser o endpoint WebSocket do próprio site publicado
+        (<code>wss://…/api/ws</code>), então a sala fica acessível pela internet sem túnel, sem programa extra e sem precisar
+        deixar um PC ligado. Clique em <b>🔌 Testar conexão</b> para confirmar, crie a sala e mande o link de convite.</p>
+
+        <p class="hint">O vídeo/áudio/inputs continuam trafegando <b>ponto a ponto</b> (WebRTC), usando os servidores
+        STUN/TURN gratuitos que o servidor já entrega — o sinalizador só faz a apresentação inicial entre os jogadores.</p>
+
+        <p class="hint"><b>Opção 2 — túnel no PC do host</b> (útil se quiser levar a biblioteca de ROMs do seu PC junto):</p>
+        <table class="hint" style="width:100%;border-collapse:collapse;margin:6px 0">
+          <tr style="color:#67e8f9"><td style="padding:3px 6px"><b>Serviço</b></td><td style="padding:3px 6px"><b>Como faz</b></td><td style="padding:3px 6px"><b>Endereço</b></td></tr>
+          <tr><td style="padding:3px 6px">⭐ <b>Cloudflare</b></td><td style="padding:3px 6px"><code>winget install Cloudflare.cloudflared</code> depois <code>cloudflared tunnel --url http://localhost:3000</code></td><td style="padding:3px 6px">HTTPS grátis, sem conta</td></tr>
+          <tr><td style="padding:3px 6px">🔒 <b>Tailscale</b></td><td style="padding:3px 6px">instala nos dois PCs, entra na mesma rede, depois <code>tailscale serve https / http://localhost:3000</code></td><td style="padding:3px 6px"><code>https://nomedopc.tailnet.ts.net</code> — <b>fixo</b></td></tr>
+          <tr><td style="padding:3px 6px">🎮 <b>Playit.gg</b></td><td style="padding:3px 6px">instala e roda um agente</td><td style="padding:3px 6px">endereço grátis próprio</td></tr>
+          <tr><td style="padding:3px 6px"><b>ngrok</b></td><td style="padding:3px 6px"><code>ngrok http 3000</code></td><td style="padding:3px 6px">HTTPS grátis (conta)</td></tr>
+        </table>
+
+        <p class="hint"><b>Passo a passo do túnel (Cloudflare):</b></p>
+        <ol class="hint" style="padding-left:18px;margin:6px 0">
+          <li>No PC com os jogos: <code>node src/backend/server.js</code></li>
+          <li>Em outra janela do PowerShell: <code>cloudflared tunnel --url http://localhost:3000</code></li>
+          <li>Ele imprime um endereço tipo <code>https://abc-123.trycloudflare.com</code></li>
+          <li>Cole esse endereço em <b>🌐 Servidor</b> → <b>Conectar</b> (ou use <b>📋 Colar</b>)</li>
+          <li>Clique em <b>🔗 Copiar link de convite</b> — o link já sai com tudo certo</li>
+        </ol>
+
+        <p class="hint">⚠️ O túnel fica ativo só enquanto o PC do host estiver ligado e o comando rodando. O endereço do Cloudflare muda a cada reinício; o do <b>Tailscale</b> é fixo.</p>
+      </div>
+    </details>
   </div>
 
   <div id="np-room-view" class="hidden">
@@ -499,6 +532,8 @@
     legacyCore: 'ps1emu.core',
     romProxy: 'ps1emu.romProxy',
     npName: 'ps1emu.npName',
+    npWsMode: 'ps1emu.npWsMode',
+    npWsUrl: 'ps1emu.npWsUrl',
     accessToken: 'ps1emu.accessToken'
   };
 
@@ -591,6 +626,7 @@
   var netplayAvailable = false;   // o servidor desta página tem signaling (netplay LAN)?
   var serverLanUrl = '';          // ex.: http://192.168.0.5:3000 (para montar o link da sala)
   var serverPublicUrl = '';       // URL pública (túnel) configurada no backend, se houver
+  var serverWsUrl = '';           // sinalizador online informado pelo backend (/api/health → ws)
 
   function getApiBase() { return readJSON(LS.apiBase) || ''; }
   function api(path, opts) {
@@ -618,6 +654,7 @@
       netplayAvailable = !!j.netplay;
       if (j.lanUrl) serverLanUrl = j.lanUrl;
       if (j.publicUrl) serverPublicUrl = j.publicUrl;
+      if (j.ws) serverWsUrl = j.ws;
       loadIceServers();
       el('backend-badge').className = 'badge ok';
       el('backend-badge').innerHTML = '<span class="dot"></span> Servidor online';
@@ -1474,6 +1511,12 @@
     audioDest: null,
     pendingJoin: null,
     pendingWs: null,   // conexão WebSocket em andamento (evita abrir duas)
+    // --- Sinalizador: dois modos ---
+    // 'lan'    → /signaling no servidor desta página (PC local / outro PC da rede)
+    // 'online' → endpoint WebSocket da Vercel (/api/ws), alcançável pela internet
+    wsMode: readJSON(LS.npWsMode) || 'lan',
+    wsUrl: readJSON(LS.npWsUrl) || null,       // URL do sinalizador online (ex.: wss://site.vercel.app/api/ws)
+    leaving: false,    // true enquanto o jogador sai da sala de propósito
     iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
   };
 
@@ -1498,16 +1541,61 @@
   };
 
   function npWsUrl() {
+    // ---- Modo ONLINE: endpoint WebSocket da Vercel (/api/ws) ----
+    if (NP.wsMode === 'online') {
+      var online = NP.wsUrl || serverWsUrl;
+      if (!online) {
+        // deduz do endereço atual (site publicado na Vercel)
+        online = (location.protocol === 'https:' ? 'wss:' : 'ws:') + '//' + location.host + '/api/ws';
+      }
+      return online;
+    }
+    // ---- Modo LAN: /signaling no servidor desta página ----
     var base = getApiBase();
     if (!base && IS_FILE) return 'ws://localhost:3000/signaling';
     var u;
     try { u = new URL(base || location.href, location.href); } catch (e) { return null; }
     var protocol = (u.protocol === 'https:' ? 'wss:' : 'ws:');
     var host = u.host;
-    // Anexa token se definido (para túnel público com proteção)
     var qs = '';
     if (accessToken) qs = (host.includes('?') ? '&' : '?') + 'token=' + encodeURIComponent(accessToken);
     return protocol + '//' + host + '/signaling' + qs;
+  }
+
+  // Troca o modo do sinalizador ('lan' ou 'online') e persiste a escolha.
+  function npSetWsMode(modo, wsUrl) {
+    NP.wsMode = (modo === 'online') ? 'online' : 'lan';
+    if (wsUrl) NP.wsUrl = wsUrl;
+    writeJSON(LS.npWsMode, NP.wsMode);
+    if (NP.wsUrl) writeJSON(LS.npWsUrl, NP.wsUrl);
+    npSetStatus(NP.wsMode === 'online'
+      ? 'Modo online (Vercel) — sala acessível pela internet.'
+      : 'Modo LAN — sala acessível na sua rede.');
+  }
+
+  // A Vercel derruba a conexão ao atingir a duração máxima da função. Em vez de
+  // deixar o jogador cair fora, reconectamos e voltamos para a MESMA sala.
+  var npReconnectTimer = null;
+  var npReconnectDelay = 1000;
+  function npScheduleReconnect(motivo) {
+    if (npReconnectTimer || !NP.roomId) return;
+    var sala = NP.roomId, eraHost = NP.isHost, idx = NP.myPlayerIndex, meta = NP.meta;
+    npReconnectDelay = Math.min(npReconnectDelay * 2, 15000);
+    npSetStatus('Reconectando em ' + Math.round(npReconnectDelay / 1000) + 's… (' + (motivo || 'conexão caiu') + ')');
+    npReconnectTimer = setTimeout(function () {
+      npReconnectTimer = null;
+      NP.roomId = null; NP.isHost = false; NP.myPlayerIndex = 0;
+      npConnect()
+        .then(function () {
+          npReconnectDelay = 1000;
+          if (eraHost) {
+            npSend({ type: 'join', payload: { roomId: sala, playerIndex: 0, password: '', metadata: meta || {} } });
+          } else {
+            npSend({ type: 'join', payload: { roomId: sala, playerIndex: idx || 1, password: '', metadata: { name: npPlayerName() } } });
+          }
+        })
+        .catch(function () { npScheduleReconnect('sinalizador indisponível'); });
+    }, npReconnectDelay);
   }
 
   function npConnect() {
@@ -1534,7 +1622,12 @@
         clearTimeout(timer); NP.pendingWs = null;
         reject(new Error('Não foi possível abrir o netplay (servidor sem WebSocket).'));
       };
-      ws.onclose = function () { if (NP.ws === ws) NP.ws = null; NP.pendingWs = null; };
+      ws.onclose = function () {
+        if (NP.ws === ws) NP.ws = null;
+        NP.pendingWs = null;
+        // Se a sala não foi fechada de propósito, tenta voltar para ela.
+        if (!NP.leaving) npScheduleReconnect('conexão caiu');
+      };
       ws.onmessage = npOnMessage;
     });
     return NP.pendingWs;
@@ -1557,10 +1650,14 @@
     var base = getApiBase() || serverPublicUrl || serverLanUrl || (IS_FILE ? 'http://localhost:3000' : location.origin);
     var url = String(base).replace(/\/+$/, '') + '/play.html?room=' + encodeURIComponent(code);
     if (accessToken) url += '&token=' + encodeURIComponent(accessToken);
-    // Inclui o servidor para o convidado conectar automaticamente (1 clique),
-    // mesmo que ele abra este link pelo site do Vercel.
+    // Inclui o servidor + o modo do sinalizador para o convidado conectar
+    // automaticamente (1 clique), mesmo abrindo o link pelo site do Vercel.
     var srv = getApiBase();
     if (srv && srv !== location.origin) url += '&server=' + encodeURIComponent(srv);
+    if (NP.wsMode === 'online') {
+      var ws = npWsUrl();
+      if (ws) url += '&ws=' + encodeURIComponent(ws);
+    }
     return url;
   }
 
@@ -1772,6 +1869,7 @@
   }
 
   function npLeave(fromRemote) {
+    NP.leaving = true;
     if (!fromRemote) npSend({ type: 'leave' });
     for (var id in NP.peers) {
       var e = NP.peers[id];
@@ -1895,12 +1993,15 @@
 
   function npCopyLink() {
     var text = npShareLink(NP.roomId);
-    if (navigator.clipboard && navigator.clipboard.writeText) {
-      navigator.clipboard.writeText(text).then(function () { toast('Link copiado!', 'ok'); })
-        .catch(function () { window.prompt('Copie o link:', text); });
-    } else {
-      window.prompt('Copie o link:', text);
-    }
+    copiarTexto(text, 'Link copiado!', 'btn-np-copy');
+  }
+
+  // Copia o link de convite da sala atual (funciona no lobby, antes e depois
+  // de criar a sala). Inclui ?room=, ?server= e ?token= quando necessário.
+  function npCopyInvite() {
+    if (!NP.roomId) { toast('Crie uma sala (ou entre numa) para gerar o link de convite.', 'warn'); return; }
+    var url = npShareLink(NP.roomId);
+    copiarTexto(url, 'Link de convite copiado! Envie para os amigos.', 'btn-np-invite', 'np-invite-status');
   }
 
   function npConnectedCount() {
@@ -2266,6 +2367,39 @@
     el('btn-np-leave').addEventListener('click', function () { npLeave(false); });
     el('btn-np-exit').addEventListener('click', function () { npLeave(false); });
     el('btn-np-copy').addEventListener('click', npCopyLink);
+    el('btn-np-invite').addEventListener('click', npCopyInvite);
+
+    // --- Sinalizador: LAN (PC local) vs Online (Vercel) ---
+    function npAtualizarRadiosWs() {
+      var online = NP.wsMode === 'online';
+      if (el('np-ws-online')) el('np-ws-online').checked = online;
+      if (el('np-ws-lan')) el('np-ws-lan').checked = !online;
+      if (el('np-ws-hint')) {
+        el('np-ws-hint').innerHTML = online
+          ? '🌐 <b>Online (Vercel)</b>: a sala usa <code>' + escapeHtml(npWsUrl()) + '</code> — acessível pela internet. O link de convite já leva o convidado ao lugar certo.'
+          : '🏠 <b>LAN (PC local)</b>: a sala usa <code>' + escapeHtml(npWsUrl()) + '</code> — funciona na sua rede (Wi-Fi).';
+      }
+    }
+    if (el('np-ws-online')) el('np-ws-online').addEventListener('change', function () { npSetWsMode('online'); npAtualizarRadiosWs(); });
+    if (el('np-ws-lan')) el('np-ws-lan').addEventListener('change', function () { npSetWsMode('lan'); npAtualizarRadiosWs(); });
+    npAtualizarRadiosWs();
+
+    // 🔌 Testar conexão com o sinalizador escolhido
+    el('btn-np-test-ws').addEventListener('click', function () {
+      npSetStatus('Testando sinalizador…');
+      npConnect()
+        .then(function () {
+          npSetStatus('✅ Sinalizador conectado (' + (NP.wsMode === 'online' ? 'online' : 'LAN') + ').');
+          toast('Sinalizador OK! Já pode criar a sala.', 'ok');
+        })
+        .catch(function (e) {
+          npSetStatus('❌ Falhou: ' + (e && e.message ? e.message : e));
+          toast('Não foi possível conectar no sinalizador. ' +
+            (NP.wsMode === 'online'
+              ? 'Confirme se o projeto está publicado na Vercel (endpoint /api/ws).'
+              : 'Confirme se o PC com os jogos está com o servidor rodando.'), 'err');
+        });
+    });
     el('btn-np-chat').addEventListener('click', npSendChat);
     el('np-chat-input').addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); npSendChat(); } });
     el('np-name').addEventListener('change', function () { NP.name = el('np-name').value.trim(); writeJSON(LS.npName, NP.name); });
@@ -2375,6 +2509,14 @@
     var roomParam = null;
     try { roomParam = new URLSearchParams(location.search).get('room'); } catch (e) {}
     if (roomParam) roomParam = String(roomParam).toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8);
+
+    // ?ws=URL → o convidado veio por um link de convite: usa o sinalizador
+    // online indicado no link (e o servidor, se vier junto). Assim UM link
+    // basta para jogar pela internet, em qualquer aparelho.
+    try {
+      var wsParam = new URLSearchParams(location.search).get('ws');
+      if (wsParam && /^wss?:\/\//i.test(wsParam)) npSetWsMode('online', wsParam);
+    } catch (e) {}
 
     checkBackend()
       .then(function () { return loadSystems(); })

@@ -135,9 +135,21 @@ function removePeer(room, peer) {
   broadcastLobby();
 }
 
-export function setupSignalingServer(server) {
-  const wss = new WebSocketServer({ server, path: '/signaling' });
-  console.log('[SIGNALING] Servidor WebSocket (sinalização + lobby) em /signaling');
+export function setupSignalingServer(server, path) {
+  const wsPath = path || '/signaling';
+  const wss = new WebSocketServer({ server, path: wsPath });
+  console.log(`[SIGNALING] Servidor WebSocket (sinalização + lobby) em ${wsPath}`);
+
+  attachSignaling(wss);
+}
+
+/**
+ * Anexa o lobby/sinalização a um WebSocketServer JÁ criado.
+ * Usado pela Vercel (api/ws.js): a função serverless exporta um http.Server com
+ * o WebSocketServer montado, e a Vercel roteia as conexões até ele.
+ */
+export function attachSignaling(wss) {
+  console.log('[SIGNALING] Lobby/sinalização anexado');
 
   wss.on('connection', (ws, req) => {
     const peerId = `peer_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;

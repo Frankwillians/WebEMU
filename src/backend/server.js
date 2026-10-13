@@ -284,6 +284,15 @@ app.use((req, res, next) => {
 app.get('/api/health', (req, res) => {
   const lanIP = getLocalIP();
   const summary = systemsSummary();
+  // Sinalizador online (Vercel): o endpoint /api/ws existe no projeto, então o
+  // netplay funciona mesmo em serverless. Pode ser desligado com NETPLAY_WS=0.
+  const netplayWsEnabled = !process.env.VERCEL || process.env.NETPLAY_WS !== '0';
+  const wsUrl = process.env.VERCEL
+    ? (() => {
+        const host = process.env.VERCEL_PROJECT_PRODUCTION_URL || process.env.VERCEL_URL;
+        return host ? `wss://${host}/api/ws` : null;
+      })()
+    : null;
   res.json({
     status: 'ok',
     service: 'webemu',
@@ -293,7 +302,8 @@ app.get('/api/health', (req, res) => {
     uptime: process.uptime(),
     gamesIndexed: summary.reduce((sum, s) => sum + s.count, 0),
     systems: summary,
-    netplay: !process.env.VERCEL,
+    netplay: netplayWsEnabled,
+    ws: wsUrl,
     publicUrl: PUBLIC_URL || null,
     lanIP,
     lanUrl: `http://${lanIP}:${config.httpPort}`

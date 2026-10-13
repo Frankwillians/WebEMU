@@ -6,7 +6,8 @@
     { "source": "/", "destination": "/play.html", "permanent": false }
   ],
   "rewrites": [
-    { "source": "/play", "destination": "/play.html" }
+    { "source": "/play", "destination": "/play.html" },
+    { "source": "/signaling", "destination": "/api/ws" }
   ],
   "headers": [
     {
