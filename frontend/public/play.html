@@ -352,6 +352,7 @@
       <span>Sala <b id="np-code" class="lan-url">—</b></span>
       <div class="row" style="gap:6px">
         <button id="btn-np-copy" class="btn sm" type="button">🔗 Copiar link</button>
+        <button id="btn-np-games" class="btn sm" type="button">🏠 Consoles</button>
         <button id="btn-np-leave" class="btn sm" type="button">🚪 Sair da sala</button>
       </div>
     </div>
@@ -1297,6 +1298,9 @@
     var coreEl = el('player-core');
     if (coreEl) coreEl.querySelector('.core-label').textContent = label;
     window.scrollTo(0, 0);
+    // Se o host está numa sala, começa (ou retoma) a transmissão da partida
+    // para os convidados que já estão esperando.
+    npHostRecheckStream();
   }
 
   function bootOverlay(msg) {
@@ -1755,8 +1759,11 @@
     npRenderRoom();
     npAppendChat('', (p.name || 'Jogador ' + (p.playerIndex + 1)) + ' entrou na sala.', false, true);
     if (NP.isHost) {
-      npHostStartStream().then(function () { npHostCreateOffer(p.id); })
-        .catch(function (e) { toast('Falha ao transmitir: ' + escapeHtml(e && e.message ? e.message : e), 'err'); });
+      // Se o host ainda não iniciou o jogo (sem canvas), a transmissão começa
+      // sozinha quando ele escolher a partida (npHostRecheckStream).
+      npHostStartStream()
+        .then(function () { npHostCreateOffer(p.id); })
+        .catch(function () { npHostRecheckStream(); });
     }
   }
 
@@ -1897,6 +1904,9 @@
   function npOpenLobby() {
     el('lobby-panel').classList.remove('hidden');
     if (el('np-name') && !el('np-name').value) el('np-name').value = NP.name || '';
+    // Deixa o "🏠 Consoles" disponível: dá para sair do lobby e escolher um
+    // jogo sem sair da sala.
+    show(el('btn-home'));
     if (!netplayAvailable) { npSetStatus('Netplay indisponível (servidor sem WebSocket)'); return; }
     npSetStatus('Conectando…');
     npConnect().then(function () {
@@ -1941,6 +1951,8 @@
     if (!NP.roomId) return;
     if (el('np-lobby-view')) el('np-lobby-view').classList.add('hidden');
     if (el('np-room-view')) el('np-room-view').classList.remove('hidden');
+    // "🏠 Consoles" disponível dentro da sala (sair/entrar em jogos sem sair da sala).
+    show(el('btn-home'));
     if (el('np-code')) el('np-code').textContent = NP.roomId;
     if (el('np-link')) el('np-link').innerHTML = 'Convide: <span class="lan-url">' + escapeHtml(npShareLink(NP.roomId)) + '</span>';
 
@@ -2170,6 +2182,30 @@
     return Promise.resolve(stream);
   }
 
+  // O host pode criar a sala ANTES de escolher o jogo. Quando o jogo enfim
+  // carrega (o canvas do emulador passa a existir), começamos a transmitir para
+  // quem já está na sala — sem precisar sair e entrar de novo.
+  function npHostRecheckStream() {
+    if (!NP.roomId || !NP.isHost) return;
+    setTimeout(function () {
+      if (!NP.roomId || !NP.isHost) return;
+      npHostStartStream()
+        .then(function () {
+          var pendentes = [];
+          for (var id in NP.peers) {
+            var e = NP.peers[id];
+            // só oferece para quem ainda não tem conexão em andamento/pronta
+            if (e && !e.pc) pendentes.push(id);
+          }
+          pendentes.forEach(function (id) { npHostCreateOffer(id); });
+          if (pendentes.length) {
+            npSetStatus('Transmitindo a partida para ' + Object.keys(NP.peers).length + ' jogador(es).');
+          }
+        })
+        .catch(function () { /* canvas ainda não disponível — tenta de novo depois */ });
+    }, 2500);
+  }
+
   function npCreatePC(peerId, isHost) {
     var entry = NP.peers[peerId] = NP.peers[peerId] || {};
     if (entry.pc) { try { entry.pc.close(); } catch (e) {} }
@@ -2350,8 +2386,17 @@
     // Netplay: lobby
     el('btn-lobby-toggle').addEventListener('click', function () {
       var panel = el('lobby-panel');
-      if (panel.classList.contains('hidden')) npOpenLobby();
-      else panel.classList.add('hidden');
+      if (panel.classList.contains('hidden')) {
+        // Já está numa sala? Só reabre o painel mostrando a sala (não reentra).
+        if (NP.roomId) {
+          panel.classList.remove('hidden');
+          npRenderRoom();
+        } else {
+          npOpenLobby();
+        }
+      } else {
+        panel.classList.add('hidden');
+      }
     });
     el('btn-np-refresh').addEventListener('click', function () {
       npConnect().then(function () { npSend({ type: 'lobby-subscribe' }); })
@@ -2367,6 +2412,8 @@
     });
     el('np-join-code').addEventListener('keydown', function (e) { if (e.key === 'Enter') el('btn-np-join').click(); });
     el('btn-np-leave').addEventListener('click', function () { npLeave(false); });
+    // 🏠 Consoles (dentro da sala): volta ao seletor SEM sair da sala.
+    el('btn-np-games').addEventListener('click', function () { el('btn-home').click(); });
     el('btn-np-exit').addEventListener('click', function () { npLeave(false); });
     el('btn-np-copy').addEventListener('click', npCopyLink);
     el('btn-np-invite').addEventListener('click', npCopyInvite);
@@ -2424,8 +2471,17 @@
     });
 
     el('btn-home').addEventListener('click', function () {
-      if (NP.roomId) npLeave(false);
+      // "🏠 Consoles" NÃO sai da sala: apenas volta ao seletor de consoles
+      // para o jogador escolher/entrar num jogo. A sala continua aberta e o
+      // botão "👥 Jogar em rede" traz o painel de volta.
       showHub();
+      if (NP.roomId && el('lobby-panel')) el('lobby-panel').classList.add('hidden');
+      if (NP.roomId) {
+        toast('Você segue na sala <b>' + escapeHtml(NP.roomId) + '</b>.' +
+          ' Escolha o console/jogo — a partida aparece para os demais jogadores.' +
+          ' Toque em <b>👥 Jogar em rede</b> para voltar à sala.', 'info', 8000);
+        npSetStatus('Na sala ' + NP.roomId + ' · escolha um jogo');
+      }
     });
     el('btn-back-hub').addEventListener('click', showHub);
 
