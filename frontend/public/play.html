@@ -241,6 +241,34 @@
   </div>
   <div id="discover-list" class="list"></div>
   <p class="hint">Procura outras instâncias do WebEMU na sua rede local (Wi-Fi/Ethernet) e mostra <strong>quais consoles e quantos jogos</strong> cada uma tem. Clique em <strong>Usar</strong> para jogar pelo servidor de outro PC.</p>
+
+  <details style="margin-top:12px;border:1px solid #223148;border-radius:10px;padding:8px 11px;background:#0e1624">
+    <summary style="cursor:pointer;font-weight:600;color:#67e8f9">🌍 Como jogar online / por que a busca não acha nada</summary>
+    <div style="padding:8px 2px">
+      <p class="hint"><b>Por que "Buscar servidores na rede" não funciona quando abro pelo Vercel?</b><br>
+      Quem varre a sua rede é o <b>servidor</b>, nunca o navegador (os navegadores bloqueiam isso por segurança). Ao abrir este site pelo endereço do Vercel, a varredura roda no datacenter da Vercel — que <b>não está na sua casa</b>, então nunca encontra seus PCs.</p>
+
+      <p class="hint"><b>A solução — um endereço HTTPS para o PC que tem os jogos:</b></p>
+      <ol class="hint" style="padding-left:18px;margin:6px 0">
+        <li>No PC com os jogos, rode: <code>node src/backend/server.js</code></li>
+        <li>Em outra janela do PowerShell, rode: <code>cloudflared tunnel --url http://localhost:3000</code></li>
+        <li>Ele imprime um endereço tipo <code>https://abc-123.trycloudflare.com</code></li>
+        <li><b>Todo mundo abre esse endereço</b> (<code>https://abc-123.trycloudflare.com/play.html</code>)</li>
+      </ol>
+
+      <p class="hint">Abrindo por esse endereço, <b>tudo passa a funcionar junto</b>, inclusive com amigos de outras casas:</p>
+      <ul class="hint" style="padding-left:18px;margin:6px 0">
+        <li>🔍 <b>Buscar servidores na rede</b> — a varredura acontece no PC do host, que está na sua rede</li>
+        <li>🎮 <b>Jogar</b> — as ROMs vêm do PC do host pelo túnel</li>
+        <li>👥 <b>Netplay / salas</b> — o WebSocket <code>wss://…/signaling</code> atravessa o túnel</li>
+      </ul>
+
+      <p class="hint">Se preferir continuar pelo site do Vercel, cole a URL do túnel no campo <b>🌐 Servidor</b> acima e clique em <b>Conectar</b>. (Não funciona com <code>http://192.168.…</code> porque o navegador bloqueia conteúdo HTTP dentro de página HTTPS.)</p>
+
+      <p class="hint"><b>Na mesma rede (LAN), sem túnel:</b> abra direto <code>http://IP-DO-PC:3000/play.html</code> — a busca e o netplay funcionam na hora.</p>
+      <p class="hint">⚠️ O túnel só fica ativo enquanto o PC do host estiver ligado e o comando rodando.</p>
+    </div>
+  </details>
 </section>
 
 <!-- NETPLAY / LOBBY PANEL -->
