@@ -7,6 +7,24 @@ import { readdir, stat, readFile } from 'fs/promises';
 import { join, resolve, extname, basename, relative } from 'path';
 import config from './config.js';
 
+/**
+ * Normaliza um caminho de pasta de jogos.
+ * Caminhos UNC (\\PC\pasta compartilhada) NÃO passam pelo resolve(): o Node
+ * transformaria "\\PC\pasta" em "C:\PC\pasta" e quebraria o acesso à rede.
+ * @param {string} dir
+ * @returns {string} caminho absoluto pronto para uso
+ */
+export function normalizeGamesDir(dir) {
+  const raw = String(dir || '').trim();
+  if (/^\\\\/.test(raw)) return raw.replace(/[\\/]+$/, '');
+  return resolve(config.projectRoot, raw);
+}
+
+/** É um caminho de rede (UNC)? */
+export function isUncPath(dir) {
+  return /^\\\\/.test(String(dir || '').trim());
+}
+
 class GameStorage {
   /**
    * @param {object} [opts]
@@ -34,7 +52,7 @@ class GameStorage {
    */
   setGamesDir(dir) {
     if (!dir || typeof dir !== 'string') throw new Error('Caminho inválido');
-    this.gamesDir = resolve(config.projectRoot, dir);
+    this.gamesDir = normalizeGamesDir(dir);
     this.cache.clear();
     this.lastScan = 0;
     return this.gamesDir;

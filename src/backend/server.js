@@ -11,6 +11,7 @@ import { join, resolve, sep, basename } from 'path';
 import { fileURLToPath } from 'url';
 import { networkInterfaces, hostname } from 'os';
 import { existsSync, mkdirSync, statSync, readdirSync, readFileSync } from 'fs';
+import { execFile } from 'node:child_process';
 
 /**
  * Descobre o melhor IP LAN da máquina.
@@ -51,7 +52,7 @@ function getLocalIP() {
   return 'localhost';
 }
 import config, { projectRoot } from './config.js';
-import gameStorage, { GameStorage } from './storage.js';
+import gameStorage, { GameStorage, normalizeGamesDir, isUncPath } from './storage.js';
 import biosStorage, { KNOWN_BIOS } from './bios.js';
 import { loadSettings, saveSettings, settingsPath } from './settings.js';
 import setupSignalingServer from './signaling.js';
@@ -102,12 +103,21 @@ let retroarchExe = detectRetroArch();
  * @returns {string} caminho absoluto aplicado
  */
 function setStorageDir(storage, dir) {
-  const target = storage.setGamesDir(dir);
-  if (!existsSync(target)) mkdirSync(target, { recursive: true });
+  const target = normalizeGamesDir(dir);
+  const unc = isUncPath(target);
+  // Em pasta compartilhada (UNC) nunca criamos nada: se não está acessível é
+  // erro de endereço/permissão do outro PC. Validamos ANTES de aplicar, para
+  // uma tentativa falha não deixar a configuração corrompida na memória.
+  if (!existsSync(target)) {
+    if (unc) {
+      throw new Error('Pasta compartilhada inacessível. Confira o endereço (\\\\PC\\pasta) e as permissões do outro PC.');
+    }
+    mkdirSync(target, { recursive: true });
+  }
   if (!statSync(target).isDirectory()) {
     throw new Error('O caminho informado não é uma pasta');
   }
-  return target;
+  return storage.setGamesDir(target);
 }
 
 /** Monta a URL pública (/roms ou /ps2roms) para um jogo indexado */
@@ -394,6 +404,11 @@ app.get('/api/discover', async (req, res) => {
   // Portas para sondar: HTTP sempre; HTTPS se houver certificado configurado.
   const ports = [{ port: config.httpPort, scheme: 'http' }];
   if (httpsServer) ports.push({ port: config.httpsPort, scheme: 'https' });
+  // Também sonda portas alternativas comuns, para achar instâncias que não
+  // estejam rodando na porta padrão deste projeto.
+  for (const p of [80, 3000, 3443, 8080, 8000]) {
+    if (p !== config.httpPort && p !== config.httpsPort) ports.push({ port: p, scheme: 'http' });
+  }
 
   const targets = [];
   for (const base of subnets) {
@@ -468,6 +483,113 @@ app.get('/api/discover', async (req, res) => {
   });
 });
 
+
+// ==================== PASTAS COMPARTILHADAS NA REDE (SMB) ====================
+//
+// Acha as PASTAS COMPARTILHADAS da rede local (o clássico "compartilhamento" do
+// Windows) para o jogador indexar os jogos direto de outro PC, sem copiar nada.
+// Cada item traz o caminho UNC (\\PC\pasta) e se está acessível.
+//
+// No Windows usa `net view` (lista de máquinas) e `net view \\PC` (lista de
+// compartilhamentos). Em Linux/macOS tenta `smbclient` se estiver instalado.
+
+/** Executa um comando e devolve o stdout (string vazia se falhar). */
+function runCmd(cmd, args, timeoutMs = 8000) {
+  return new Promise((resolve) => {
+    execFile(cmd, args, { timeout: timeoutMs, windowsHide: true, maxBuffer: 8 * 1024 * 1024 },
+      (err, stdout) => resolve(err ? '' : String(stdout || '')));
+  });
+}
+
+/** `net view` → lista de computadores (linhas que começam com \\) */
+function parseNetViewComputers(out) {
+  const pcs = [];
+  for (const raw of String(out).split(/\r?\n/)) {
+    const line = raw.trim();
+    if (!line.startsWith('\\\\')) continue;
+    const m = line.match(/^\\\\([^\s\\]+)\s*(.*)$/);
+    if (m) pcs.push({ name: m[1], comment: (m[2] || '').trim() });
+  }
+  return pcs;
+}
+
+/** `net view \\PC` → lista de compartilhamentos de disco */
+function parseNetViewShares(out) {
+  const shares = [];
+  for (const raw of String(out).split(/\r?\n/)) {
+    const line = raw.trim();
+    // "Jogos        Disco   Meus jogos de PS1"
+    const m = line.match(/^([^\s]+)\s+(Disco|Disk)\b\s*(.*)$/i);
+    if (!m) continue;
+    if (m[1].endsWith('$')) continue; // compartilhamentos administrativos (C$, ADMIN$)
+    shares.push({ name: m[1], comment: (m[3] || '').trim() });
+  }
+  return shares;
+}
+
+/** Dá para ler a pasta? (UNC pode exigir usuário/senha do outro PC) */
+function pastaAcessivel(dir) {
+  try { readdirSync(dir); return true; } catch { return false; }
+}
+
+app.get('/api/shares', async (req, res) => {
+  const started = Date.now();
+  const shares = [];
+  const avisos = [];
+
+  try {
+    if (process.platform === 'win32') {
+      const eu = (hostname() || '').toUpperCase();
+      const pcs = parseNetViewComputers(await runCmd('net', ['view']));
+
+      if (!pcs.length) {
+        avisos.push('A "descoberta de rede" do Windows pode estar desligada. Ligue em: Painel de Controle → Central de Rede e Compartilhamento → Alterar configurações de compartilhamento avançadas → ativar "Descoberta de rede" e "Compartilhamento de arquivo e impressora" (perfil privado).');
+      }
+
+      const outros = pcs.filter(p => p.name.toUpperCase() !== eu);
+      // Limita a 15 PCs para não demorar demais.
+      for (const pc of outros.slice(0, 15)) {
+        const lista = parseNetViewShares(await runCmd('net', ['view', '\\\\' + pc.name]));
+        for (const sh of lista) {
+          const unc = '\\\\' + pc.name + '\\' + sh.name;
+          shares.push({
+            path: unc,
+            pc: pc.name,
+            share: sh.name,
+            comment: sh.comment,
+            accessible: pastaAcessivel(unc)
+          });
+        }
+      }
+    } else {
+      // Linux/macOS: smbclient -L (se existir) — melhor esforço.
+      const out = await runCmd('smbclient', ['-L', '-N', '127.0.0.1'], 6000);
+      if (out) {
+        for (const raw of out.split(/\r?\n/)) {
+          const m = raw.match(/^\s*(\S+)\s+Disk/i);
+          if (!m || m[1].endsWith('$')) continue;
+          shares.push({ path: 'smb://127.0.0.1/' + m[1], pc: '127.0.0.1', share: m[1], comment: '', accessible: false });
+        }
+      } else {
+        avisos.push('A busca completa de pastas compartilhadas funciona no Windows. No Linux/macOS instale o "smbclient".');
+      }
+    }
+  } catch (e) {
+    avisos.push('Falha ao procurar pastas: ' + e.message);
+  }
+
+  // As que dão para ler vêm primeiro.
+  shares.sort((a, b) => (a.accessible === b.accessible) ? 0 : (a.accessible ? -1 : 1));
+
+  res.json({
+    status: 'ok',
+    shares,
+    count: shares.length,
+    accessible: shares.filter(s => s.accessible).length,
+    avisos,
+    durationMs: Date.now() - started
+  });
+});
 
 // Lista todos os jogos indexados
 app.get('/api/games', async (req, res) => {
