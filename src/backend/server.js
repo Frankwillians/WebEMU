@@ -12,7 +12,7 @@ import { fileURLToPath } from 'url';
 import { networkInterfaces, hostname } from 'os';
 import { existsSync, mkdirSync, statSync, readdirSync, readFileSync } from 'fs';
 import { writeFile } from 'fs/promises';
-import { execFile } from 'node:child_process';
+import { execFile, spawn, spawnSync } from 'node:child_process';
 
 /**
  * Descobre o melhor IP LAN da máquina.
@@ -65,7 +65,6 @@ import {
   findRetroCore,
   boxartRepos
 } from './systems.js';
-import { spawn } from 'child_process';
 import { Readable } from 'stream';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -326,7 +325,7 @@ app.get('/api/health', (req, res) => {
     systems: summary,
     netplay: netplayWsEnabled,
     ws: wsUrl,
-    publicUrl: PUBLIC_URL || null,
+    publicUrl: PUBLIC_URL || tunnel.url || null,
     lanIP,
     lanUrl: `http://${lanIP}:${config.httpPort}`,
     lanHttpsUrl: httpsServer ? `https://${lanIP}:${config.httpsPort}` : null
@@ -1356,6 +1355,153 @@ app.use(express.static(staticDir, {
 // signaling quando rodando como servidor de verdade.
 if (!process.env.VERCEL) setupSignalingServer(httpServer);
 
+// ==================== TÚNEL PÚBLICO (compartilhar pela internet) ====================
+//
+// Sobe um túnel HTTPS para ESTE servidor e devolve a URL pública, para o host
+// compartilhar a sala/biblioteca com quem está em OUTRA rede (outra casa). Não
+// precisa de conta: usa o "quick tunnel" do cloudflared (preferido) ou o ngrok,
+// se estiver instalado. O túnel expõe este PC (API + ROMs + netplay) na
+// internet — use ACCESS_TOKEN se a rede não for de confiança.
+//
+// Se PUBLIC_URL já estiver definida (um túnel que VOCÊ subiu por fora), ela
+// manda: o botão apenas reflete esse endereço e não inicia processo nenhum.
+
+const TUNNEL_PROVIDERS = {
+  cloudflared: {
+    bin: 'cloudflared',
+    envBin: 'CLOUDFLARED_BIN',
+    args: (port) => ['tunnel', '--url', `http://localhost:${port}`, '--no-autoupdate'],
+    urlRe: /(https:\/\/[a-z0-9-]+\.trycloudflare\.com)/i,
+    install: 'winget install --id Cloudflare.cloudflared'
+  },
+  ngrok: {
+    bin: 'ngrok',
+    envBin: 'NGROK_BIN',
+    args: (port) => ['http', String(port), '--log=stdout'],
+    urlRe: /url=(https:\/\/[a-z0-9-]+\.ngrok[-a-z0-9]*(?:\.app|\.dev|\.io))/i,
+    install: 'winget install --id Ngrok.Ngrok'
+  }
+};
+
+let tunnel = { status: 'stopped', provider: null, url: null, error: null, proc: null };
+
+// Permite apontar o binário por variável de ambiente (instalação fora do PATH),
+// como o OPENSSL_BIN do `npm run cert`.
+function tunnelBin(provider) {
+  return process.env[provider.envBin] || provider.bin;
+}
+
+function binExists(bin) {
+  if (/[\\/]/.test(bin)) return existsSync(bin); // caminho explícito (override)
+  const probe = process.platform === 'win32' ? 'where' : 'which';
+  const r = spawnSync(probe, [bin], { encoding: 'utf8' });
+  return r.status === 0 && String(r.stdout || '').trim().length > 0;
+}
+
+function tunnelProviderAvailable() {
+  for (const id of Object.keys(TUNNEL_PROVIDERS)) {
+    if (binExists(tunnelBin(TUNNEL_PROVIDERS[id]))) return id;
+  }
+  return null;
+}
+
+function killTunnelProc() {
+  const proc = tunnel.proc;
+  tunnel.proc = null;
+  if (!proc) return;
+  try {
+    if (process.platform === 'win32') spawnSync('taskkill', ['/pid', String(proc.pid), '/T', '/F'], { stdio: 'ignore' });
+    else proc.kill('SIGTERM');
+  } catch { /* ignore */ }
+}
+
+function stopTunnel() {
+  killTunnelProc();
+  tunnel = { status: 'stopped', provider: null, url: null, error: null, proc: null };
+}
+
+function startTunnel() {
+  return new Promise((resolve) => {
+    // 1) Túnel externo já configurado via PUBLIC_URL — só reflete.
+    if (PUBLIC_URL) {
+      tunnel = { status: 'running', provider: 'public-url', url: PUBLIC_URL, error: null, proc: null };
+      return resolve(tunnel);
+    }
+    // 2) Já tem um túnel nosso rodando.
+    if (tunnel.status === 'running' && tunnel.url) return resolve(tunnel);
+
+    killTunnelProc();
+    const providerId = tunnelProviderAvailable();
+    if (!providerId) {
+      tunnel = {
+        status: 'unavailable', provider: null, url: null, proc: null,
+        error: 'Nenhum túnel instalado. Instale o cloudflared: ' + TUNNEL_PROVIDERS.cloudflared.install
+      };
+      return resolve(tunnel);
+    }
+
+    const provider = TUNNEL_PROVIDERS[providerId];
+    const proc = spawn(tunnelBin(provider), provider.args(config.httpPort), { stdio: ['ignore', 'pipe', 'pipe'] });
+    tunnel = { status: 'starting', provider: providerId, url: null, error: null, proc };
+
+    let out = '';
+    let done = false;
+    let timer = null;
+    const finish = (url, error) => {
+      if (done) return;
+      done = true;
+      if (timer) clearTimeout(timer);
+      if (url) {
+        tunnel.status = 'running';
+        tunnel.url = url;
+        tunnel.error = null;
+        console.log(`[TUNNEL] Público em ${url} (${providerId})`);
+      } else {
+        killTunnelProc();
+        tunnel = { status: 'error', provider: providerId, url: null, proc: null, error: error || 'Falha ao criar o túnel.' };
+        console.warn('[TUNNEL] ' + tunnel.error);
+      }
+      resolve(tunnel);
+    };
+    const onData = (d) => {
+      out += String(d);
+      const m = provider.urlRe.exec(out);
+      if (m) finish((m[1] || m[0]).replace(/\/+$/, ''));
+    };
+    proc.stdout.on('data', onData);
+    proc.stderr.on('data', onData);
+    proc.on('error', (e) => finish(null, e.message));
+    proc.on('exit', (code) => finish(null, `${providerId} encerrou (código ${code}).`));
+    timer = setTimeout(() => finish(null, 'Tempo esgotado ao criar o túnel (o binário pode precisar de login/config).'), 20000);
+  });
+}
+
+// Estado efetivo do túnel: PUBLIC_URL (túnel externo) tem prioridade e conta
+// como "running" mesmo sem termos subido processo.
+function tunnelState() {
+  if (PUBLIC_URL) return { status: 'running', provider: 'public-url', url: PUBLIC_URL, error: null };
+  return { status: tunnel.status, provider: tunnel.provider, url: tunnel.url || null, error: tunnel.error };
+}
+
+// Estado do túnel (o painel 🌐 Servidor usa isto ao abrir).
+app.get('/api/tunnel', (req, res) => {
+  res.json({
+    ...tunnelState(),
+    available: !!PUBLIC_URL || !!tunnelProviderAvailable(),
+    install: TUNNEL_PROVIDERS.cloudflared.install
+  });
+});
+
+app.post('/api/tunnel/start', async (req, res) => {
+  const t = await startTunnel();
+  res.json({ status: t.status, provider: t.provider, url: PUBLIC_URL || t.url || null, error: t.error });
+});
+
+app.post('/api/tunnel/stop', (req, res) => {
+  stopTunnel();
+  res.json({ status: 'stopped', url: null, error: null });
+});
+
 // ==================== HTTPS (opcional, p/ PSP e DOS) ====================
 // PSP (PPSSPP) e DOS (DOSBox Pure) só têm build *threaded* no EmulatorJS e,
 // portanto, exigem SharedArrayBuffer — que o navegador libera apenas em
@@ -1469,6 +1615,7 @@ async function start() {
 // Graceful shutdown
 process.on('SIGINT', async () => {
   console.log('\n[SERVER] Encerrando...');
+  stopTunnel();
   for (const storage of storages.values()) storage.stopAutoScan();
   if (httpsServer) {
     try { httpsServer.close(); } catch { /* ignore */ }
