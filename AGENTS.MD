@@ -338,6 +338,18 @@ Mensagens do sinalizador (`src/backend/signaling.js`): `join`, `leave`, `offer`,
 10. **Mixed Content:** em HTTPS (Vercel), ROMs/capas/BIOS vindos de HTTP local
     passam por proxy (`/api/rom`, `/api/cover`). Use `precisaProxy()`
     (`location.protocol === 'https:' && /^http:/i.test(getApiBase())`).
+11. **Ciclo de vida do jogo local.** No boot o site **não** reabre o último jogo
+    (abre no seletor, `showHub()`); `🏠 Consoles` **encerra** o núcleo local
+    (`npPararTransmissao` + `npDestroyEmulator`), valendo para solo e host — nada
+    pode seguir rodando ao fundo.
+12. **O "palco" do convidado nunca fica sobre o emulador local.** `showPlayer`
+    esconde `#np-stage`; ao virar host, `npAssumirHost()` sai do palco e retoma a
+    transmissão (ou volta ao hub se não houver jogo). Sem isso, o host via tela
+    preta "Aguardando o host" sobre o próprio jogo.
+13. **Recuperação de conexão do convidado.** Se o vídeo do host não chega em ~8 s,
+    o vigia (`npStartGuestWatchdog`) envia `sync-request` ao host, que refaz a
+    oferta (`npHostOnSyncRequest`) — sem precisar sair/entrar da sala. O host não
+    cria ofertas concorrentes (`npHostCreateOffer(force)`).
 
 Painéis da UI: **🌐 Servidor** = só rede local (achar PC/pastas compartilhadas);
 **👥 Jogar em rede** = criar sala / netplay. Não misture as responsabilidades.
@@ -446,6 +458,10 @@ resultado **verificável** (teste/validação) antes de considerar pronto.
 | Capa/ROM bloqueada no Vercel | Mixed Content: use `/api/cover`, `/api/rom` (`precisaProxy()`) |
 | Convidado não vê, host trava | `streamVersion`/recriação de PC, `npHostRecheckStream`, `track ended` |
 | "Aguardando o host" preso | Só deve aparecer em `failed`/`closed`; limpe estado ao sair |
+| Host vê tela preta "Aguardando o host" | Palco `#np-stage` do convidado sobre o canvas; esconder no `showPlayer`/`npAssumirHost` |
+| Jogo continua rodando ao fundo | `🏠 Consoles` deve destruir o núcleo local (solo e host), não só o host |
+| Clicou em 🏠 e não consegue mais voltar/parar | No boot não reabrir o último jogo; abrir no seletor (`showHub()`) |
+| Convidado não conecta "de primeira" | Vigia envia `sync-request`; host refaz a oferta (`npHostOnSyncRequest`); resetar `NP.leaving` |
 | Clique duplo no convite cria "Player 2" | Token de sessão (`np_session_token`) + `resumed` |
 | Dois peers do mesmo IP | Anti-clone por IP (sem token) |
 | Lobby some na Vercel | Funções serverless não compartilham memória — limitação conhecida |

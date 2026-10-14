@@ -1520,6 +1520,14 @@
     hide(el('view-system'));
     show(el('view-player'));
     show(el('btn-home'));
+    // O jogador local roda o jogo aqui — o "palco" do convidado (tela preta com
+    // "Aguardando o host") NUNCA pode ficar por cima do emulador. Sem isso, quem
+    // já foi convidado em algum momento via o jogo do host com a tela preta por
+    // cima, mesmo sendo o próprio host.
+    if (el('np-stage')) el('np-stage').classList.add('hidden');
+    if (el('np-video')) { try { el('np-video').pause(); } catch (e) {} el('np-video').srcObject = null; }
+    npSetGuestChrome(false);
+    npClearGuestWatchdog();
     el('player-name').textContent = session.name || '—';
     var label = sys.short || getCoreFor(sys) || '—';
     var coreEl = el('player-core');
@@ -1856,6 +1864,7 @@
     wsMode: readJSON(LS.npWsMode) || 'lan',
     wsUrl: readJSON(LS.npWsUrl) || null,       // URL do sinalizador online (ex.: wss://site.vercel.app/api/ws)
     leaving: false,    // true enquanto o jogador sai da sala de propósito
+    guestWatchdog: null, // timer do convidado que pede nova oferta se o vídeo não chega
     iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
   };
 
@@ -1938,6 +1947,9 @@
   }
 
   function npConnect() {
+    // Reconectar/enviar de novo reativa o auto-reconexão: NP.leaving só fica
+    // ligado enquanto o jogador está de propósito fora de uma sala.
+    NP.leaving = false;
     if (NP.ws && NP.ws.readyState === 1) return Promise.resolve(NP.ws);
     if (NP.pendingWs) return NP.pendingWs;
     NP.pendingWs = new Promise(function (resolve, reject) {
@@ -2060,6 +2072,9 @@
       case 'ice-candidate':
         npOnIce(p.fromId, p.candidate);
         break;
+      case 'sync-request':
+        npHostOnSyncRequest(p.fromId);
+        break;
       case 'kicked':
         toast('Você foi removido da sala.', 'warn');
         npLeave(true);
@@ -2087,9 +2102,9 @@
   }
 
   function npOnPeerList(p) {
-    NP.myId = p.yourId;
     var eraHost = NP.isHost;
-    NP.myPlayerIndex = p.yourPlayerIndex || 0;
+    NP.myId = p.yourId;
+    NP.myPlayerIndex = (p.yourPlayerIndex != null) ? p.yourPlayerIndex : 0;
     // Quem é jogador 1 (índice 0) é o host — o servidor pode ter passado a vez.
     NP.isHost = NP.myPlayerIndex === 0;
     if (p.metadata) NP.meta = p.metadata;
@@ -2098,13 +2113,8 @@
     var list = (p.peers || []).map(function (x) {
       return { id: x.id, playerIndex: x.playerIndex, name: x.name || x.metadata && x.metadata.name };
     });
-    list.push({ id: p.yourId, playerIndex: p.yourPlayerIndex, name: NP.isHost ? (NP.meta && NP.meta.host) || NP.name : NP.name });
+    list.push({ id: p.yourId, playerIndex: NP.myPlayerIndex, name: NP.isHost ? (NP.meta && NP.meta.host) || NP.name : NP.name });
     NP.players = list.sort(function (a, b) { return a.playerIndex - b.playerIndex; });
-    NP.myPlayerIndex = p.yourPlayerIndex;
-    NP.isHost = NP.myPlayerIndex === 0;
-    if (p.metadata) NP.meta = p.metadata;
-    if (p.room) NP.summary = p.room;
-    NP.roomId = (p.room && p.room.roomId) || NP.roomId;
     NP.pendingJoin = null;
     npRenderRoom();
     // Se é retomada (mesmo navegador reconectou), NÃO recria a view de guest nem
@@ -2112,9 +2122,7 @@
     if (!p.resumed) {
       if (!NP.isHost) npShowGuest();
       if (NP.isHost && !eraHost) {
-        npAppendChat('', '👑 Você agora é o host da sala ' + NP.roomId + '.', false, true);
-        toast('👑 Você agora é o <b>host</b> da sala. Escolha um jogo para transmitir.', 'info', 9000);
-        npHostRecheckStream();
+        npAssumirHost();
       }
       npAppendChat('', 'Você entrou na sala ' + NP.roomId + '.', false, true);
     } else {
@@ -2189,17 +2197,34 @@
     if (euSouOHost) {
       NP.isHost = true;
       NP.myPlayerIndex = 0;
-      npAppendChat('', '👑 Você agora é o host da sala ' + NP.roomId + '.', false, true);
-      toast('👑 Você agora é o <b>host</b> da sala ' + escapeHtml(NP.roomId) +
-        '.<br>Escolha um jogo — a partida aparece para todos.', 'info', 9000);
+      npAssumirHost();
       npSetStatus('Você é o host · escolha um jogo para transmitir');
-      // Se já houver um jogo carregado neste aparelho, começa a transmitir.
-      npHostRecheckStream();
     } else {
       NP.isHost = false;
       npAppendChat('', '👑 ' + (p.hostName || 'Outro jogador') + ' agora é o host da sala.', false, true);
     }
     npRenderRoom();
+  }
+
+  // Assume a função de host: sai do "palco" de convidado (que ficaria com a tela
+  // preta "Aguardando o host" por cima de tudo) e retoma a transmissão do jogo
+  // local, se houver. Sem jogo carregado, volta ao hub para escolher um.
+  function npAssumirHost() {
+    npClearGuestWatchdog();
+    if (window.EJS_emulator) {
+      npMostrarJogoHost();
+      toast('👑 Você agora é o <b>host</b> da sala ' + escapeHtml(NP.roomId) +
+        '.<br>Transmitindo a partida em andamento.', 'info', 9000);
+    } else {
+      if (el('np-stage')) el('np-stage').classList.add('hidden');
+      npSetGuestChrome(false);
+      showHub();
+      toast('👑 Você agora é o <b>host</b> da sala ' + escapeHtml(NP.roomId) +
+        '.<br>Escolha um jogo em <b>🏠 Consoles</b> para transmitir.', 'info', 9000);
+    }
+    npAppendChat('', '👑 Você agora é o host da sala ' + NP.roomId + '.', false, true);
+    npAtualizarBotaoStream();
+    npHostRecheckStream();
   }
 
   // -------------------------------------------------------------- entrar/sair
@@ -2295,6 +2320,7 @@
   // "⏹️ Parar": derruba o jogo e volta aos consoles. Se estiver numa sala, a
   // sala continua aberta (o transmisso reinicia quando outro jogo carregar).
   function npStopGame() {
+    npClearGuestWatchdog();
     npDestroyEmulator();
     showHub();
     npSetStatus(NP.roomId ? 'Jogo parado · sala ' + NP.roomId + ' continua aberta' : 'Jogo parado');
@@ -2302,6 +2328,7 @@
 
   function npLeave(fromRemote) {
     NP.leaving = true;
+    npClearGuestWatchdog();
     if (!fromRemote) npSend({ type: 'leave' });
     // Saiu da sala → o jogo para de verdade (nada fica rodando ao fundo).
     npDestroyEmulator();
@@ -2546,6 +2573,7 @@
   }
 
   function npPararTransmissao() {
+    npClearGuestWatchdog();
     // Host: derruba a captura.
     if (NP.localStream) {
       NP.localStream.getTracks().forEach(function (t) { try { t.stop(); } catch (e) {} });
@@ -2578,6 +2606,35 @@
     npAbrirStream();
   }
 
+  // Vigia do convidado: se o vídeo do host não chegar em alguns segundos (a
+  // primeira negociação às vezes falha), pede uma nova oferta ao host — sem
+  // precisar sair e entrar na sala de novo.
+  function npHostPeerId() {
+    for (var i = 0; i < NP.players.length; i++) {
+      var pl = NP.players[i];
+      if (pl.playerIndex === 0 && pl.id && pl.id !== NP.myId) return pl.id;
+    }
+    return null;
+  }
+  function npClearGuestWatchdog() {
+    if (NP.guestWatchdog) { clearTimeout(NP.guestWatchdog); NP.guestWatchdog = null; }
+  }
+  function npStartGuestWatchdog() {
+    npClearGuestWatchdog();
+    NP.guestWatchdog = setTimeout(function () {
+      NP.guestWatchdog = null;
+      if (!NP.roomId || NP.isHost || NP.leaving) return;
+      var vt = NP.remoteStream && NP.remoteStream.getVideoTracks()[0];
+      if (vt && vt.readyState === 'live') return; // já está vendo o host
+      var hid = npHostPeerId();
+      if (hid) {
+        npSetStatus('Reconectando ao host…');
+        npSend({ type: 'sync-request', targetId: hid });
+      }
+      npStartGuestWatchdog(); // insiste até o vídeo chegar
+    }, 8000);
+  }
+
   function npShowGuest() {
     // Limpa estado de peer connections anterior (evita "Aguardando o host" preso
     // de conexão velha quando o jogador reentra na sala ou host migra).
@@ -2606,6 +2663,7 @@
     npMostrarPad(padGuardado === null ? npEhToque() : padGuardado === '1');
     hideBootOverlay();
     npSetGuestChrome(true);
+    npStartGuestWatchdog();
     updateNpBadge();
     window.scrollTo(0, 0);
   }
@@ -3082,7 +3140,7 @@
         var ids = Object.keys(NP.peers);
         if (!ids.length) { npRecheckBusy = false; return; }
         ids.forEach(function (id) {
-          if (NP.peers[id]) npHostCreateOffer(id);
+          if (NP.peers[id]) npHostCreateOffer(id, true);
         });
         npSetStatus('Transmitindo a partida para ' + ids.length + ' jogador(es).');
         npRecheckBusy = false;
@@ -3148,12 +3206,28 @@
     return pc;
   }
 
-  function npHostCreateOffer(peerId) {
+  function npHostCreateOffer(peerId, force) {
+    var entry = NP.peers[peerId];
+    // Evita criar uma segunda oferta em cima de uma conexão que já está sendo
+    // negociada/ativa (isso causava a falha de "não funcionou de primeira").
+    if (!force && entry && entry.pc) {
+      var st = entry.pc.connectionState;
+      if (st === 'new' || st === 'connecting' || st === 'connected') return;
+    }
     var pc = npCreatePC(peerId, true);
     pc.createOffer()
       .then(function (d) { return pc.setLocalDescription(d); })
       .then(function () { npSend({ type: 'offer', targetId: peerId, payload: { sdp: pc.localDescription } }); })
       .catch(function (e) { console.warn('[NETPLAY] offer:', e); });
+  }
+
+  // O convidado pede uma nova oferta quando a primeira negociação não vingou.
+  // O sinalizador apenas redireciona a mensagem para o host (targetId).
+  function npHostOnSyncRequest(fromId) {
+    if (!NP.isHost || !fromId) return;
+    npHostStartStream()
+      .then(function () { npHostCreateOffer(fromId, true); })
+      .catch(function () { npHostRecheckStream(); });
   }
 
   function npHostOnAnswer(fromId, sdp) {
@@ -3200,6 +3274,7 @@
   function npGuestOnTrack(e) {
     var track = e.track;
     if (track.kind === 'video') {
+      npClearGuestWatchdog();
       // Stream novo do host (troca de jogo) → substitui o vídeo completamente
       // em vez de acumular tracks (o <video> só toca a primeira track de vídeo).
       var v = el('np-video');
@@ -3398,10 +3473,13 @@
     });
 
     el('btn-home').addEventListener('click', function () {
-      // Indo escolher/trocar de jogo: se o host está com uma partida rodando,
-      // paramos tudo antes (núcleo, áudio e transmissão) para nada ficar
-      // rodando ao fundo enquanto ele decide o próximo jogo.
-      if (NP.isHost && window.EJS_emulator) { npPararTransmissao(); npDestroyEmulator(); }
+      // Indo escolher/trocar de jogo: PARAMOS o jogo local de verdade (núcleo,
+      // áudio e transmissão) para nada ficar rodando ao fundo enquanto o jogador
+      // decide o próximo jogo — vale tanto no modo solo quanto como host.
+      if (window.EJS_emulator) {
+        if (NP.roomId) npPararTransmissao(); // encerra a transmissão para a sala
+        npDestroyEmulator();
+      } else { var v = el('np-video'); if (v) { try { v.pause(); } catch (e) {} } }
       // "🏠 Consoles" NÃO sai da sala: apenas volta ao seletor de consoles
       // para o jogador escolher/entrar num jogo. A sala continua aberta e o
       // botão "👥 Jogar em rede" traz o painel de volta.
@@ -3541,13 +3619,14 @@
           npOpenLobby();
           npJoinRoom(roomParam, '');
         } else {
-          startPlayer();
+          // NÃO reabre o último jogo sozinho: o site abre no seletor de consoles.
+          showHub();
         }
       })
       .catch(function () {
         el('brand-sub').textContent = 'Servidor offline';
         el('systems-grid').innerHTML = '<div class="empty">Servidor indisponível. Inicie o backend e recarregue, ou clique em <b>🌐 Servidor</b> para apontar outro.</div>';
-        if (!roomParam) startPlayer();
+        if (!roomParam) showHub();
       });
   });
 })();
