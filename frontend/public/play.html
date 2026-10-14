@@ -2573,6 +2573,123 @@
     } catch (e) { return false; }
   }
 
+  // ------------------------------------------------------- controle bluetooth/USB
+  // Gamepad API padrão — funciona com qualquer controle Bluetooth, USB ou
+  // integrado (Steam Deck, Backbone, Razer Kishi, 8BitDo, Xbox, PS4/PS5, Switch Pro).
+  // Mapeia para os mesmos índices RetroArch que o pad na tela e o teclado.
+  var NP_GP = {
+    polling: false,
+    prevButtons: [],
+    prevAxes: [],
+    // RetroArch indices para cada botão padrão do Gamepad (layout Xbox/PS)
+    // GP btn -> RA index
+    mapBtn: {
+      0: 0,   // A (Cross) -> B
+      1: 8,   // B (Circle) -> A
+      2: 1,   // X (Square) -> Y
+      3: 9,   // Y (Triangle) -> X
+      4: 10,  // LB/L1 -> L
+      5: 11,  // RB/R1 -> R
+      6: -1,  // LT/L2 (analógico) -> trata nos eixos
+      7: -1,  // RT/R2 (analógico) -> trata nos eixos
+      8: 2,   // Select/Back -> SELECT
+      9: 3,   // Start -> START
+      10: -1, // L3 (não mapeado no pad atual)
+      11: -1, // R3 (não mapeado no pad atual)
+      12: 4,  // D-pad Up
+      13: 5,  // D-pad Down
+      14: 6,  // D-pad Left
+      15: 7,  // D-pad Right
+      16: -1  // Guide/Home
+    },
+    // Deadzone para sticks/analógicos
+    deadzone: 0.25,
+    // Inicia o polling quando entra no jogo (host ou convidado)
+    iniciar: function () {
+      if (this.polling) return;
+      this.polling = true;
+      this.prevButtons = [];
+      this.prevAxes = [];
+      this.loop();
+    },
+    parar: function () { this.polling = false; },
+    loop: function () {
+      if (!this.polling) return;
+      var gps = navigator.getGamepads ? navigator.getGamepads() : [];
+      for (var i = 0; i < gps.length; i++) {
+        var gp = gps[i];
+        if (!gp) continue;
+        this.processar(gp);
+      }
+      requestAnimationFrame(this.loop.bind(this));
+    },
+    processar: function (gp) {
+      var self = this;
+      // Botões
+      gp.buttons.forEach(function (btn, idx) {
+        var ra = self.mapBtn[idx];
+        if (ra === undefined || ra === -1) return;
+        var pressed = btn.pressed;
+        var prev = self.prevButtons[idx] || false;
+        if (pressed !== prev) {
+          self.prevButtons[idx] = pressed;
+          npSendInput(ra, pressed ? 1 : 0);
+        }
+      });
+      // Eixos (sticks + gatilhos analógicos)
+      gp.axes.forEach(function (val, idx) {
+        var prev = self.prevAxes[idx] || 0;
+        // Só dispara se cruzou a deadzone
+        if (Math.abs(val) > self.deadzone && Math.abs(prev) <= self.deadzone) {
+          // Direção
+          if (idx === 0) { // Left stick X
+            npSendInput(val > 0 ? 7 : 6, 1); // Right / Left
+          } else if (idx === 1) { // Left stick Y
+            npSendInput(val > 0 ? 5 : 4, 1); // Down / Up
+          } else if (idx === 2) { // Right stick X (não mapeado)
+            // opcional: C-stick
+          } else if (idx === 3) { // Right stick Y
+          } else if (idx === 4) { // LT analógico
+            if (val > self.deadzone) npSendInput(10, 1); // L (aproxima)
+          } else if (idx === 5) { // RT analógico
+            if (val > self.deadzone) npSendInput(11, 1); // R
+          }
+        }
+        // Solta quando volta pra deadzone
+        if (Math.abs(val) <= self.deadzone && Math.abs(prev) > self.deadzone) {
+          if (idx === 0) { npSendInput(7, 0); npSendInput(6, 0); }
+          else if (idx === 1) { npSendInput(5, 0); npSendInput(4, 0); }
+          else if (idx === 4) { npSendInput(10, 0); }
+          else if (idx === 5) { npSendInput(11, 0); }
+        }
+        self.prevAxes[idx] = val;
+      });
+    }
+  };
+
+  // Inicia/para o gamepad junto com a tela do jogador
+  var _npShowGuestOrig = npShowGuest;
+  npShowGuest = function () {
+    _npShowGuestOrig.apply(this, arguments);
+    NP_GP.iniciar();
+  };
+  var _npPararTransmissaoOrig = npPararTransmissao;
+  npPararTransmissao = function () {
+    _npPararTransmissaoOrig.apply(this, arguments);
+    NP_GP.parar();
+  };
+  // Também inicia quando o HOST abre o jogo (para jogar com controle no celular)
+  var _showPlayerOrig = showPlayer;
+  showPlayer = function () {
+    _showPlayerOrig.apply(this, arguments);
+    NP_GP.iniciar();
+  };
+  var _npStopGameOrig = npStopGame;
+  npStopGame = function () {
+    _npStopGameOrig.apply(this, arguments);
+    NP_GP.parar();
+  };
+
   // --------------------------------------------------------------- tela cheia
   // O que estava errado: o código antigo usava só `document.fullscreenElement`
   // e `wrap.requestFullscreen()`. Isso NÃO existe no iPhone (o Safari só faz
