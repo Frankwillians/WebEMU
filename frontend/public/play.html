@@ -496,6 +496,13 @@
     <section class="card" id="card-links">
       <h2><span class="ico">🔗</span> Links salvos</h2>
       <p class="hint">Todo jogo aberto por <strong>link</strong> é catalogado aqui automaticamente — separado por console, com capa — e fica disponível para jogar de novo quando quiser.</p>
+      <p class="hint">Use <b>⬇️ Exportar backup</b> para levar a coleção (de <b>todos os consoles</b>) a outro aparelho e <b>⬆️ Importar backup</b> para restaurá-la.</p>
+      <div class="row" style="margin:6px 0">
+        <button id="btn-links-export" class="btn sm" type="button" title="Baixar um arquivo com a coleção de TODOS os consoles">⬇️ Exportar backup</button>
+        <button id="btn-links-import" class="btn sm" type="button" title="Restaurar a coleção a partir de um arquivo de backup">⬆️ Importar backup</button>
+        <input id="links-import-input" type="file" accept="application/json,.json" class="hidden" />
+        <span class="hint" id="links-backup-status" style="margin:0"></span>
+      </div>
       <div id="links-list" class="games-grid"><div class="empty">Nenhum link salvo neste console ainda.</div></div>
     </section>
 
@@ -856,7 +863,7 @@
       return r.json();
     }).then(function (j) {
       systemsList = j.systems || [];
-      el('brand-sub').textContent = systemsList.length + ' consoles · ' + (j.totalGames || 0) + ' jogos';
+      el('brand-sub').textContent = systemsList.length + ' consoles · ' + ((j.totalGames || 0) + linksTotalCount()) + ' jogos';
       renderHub();
       return j;
     });
@@ -892,13 +899,14 @@
     card.type = 'button';
     card.className = 'sys-card';
     card.style.setProperty('--c', s.color || '#3b82f6');
+    var total = (s.count || 0) + linksCount(s.id);
     var tags = ['<span class="pill">' + (s.kind === 'external' ? 'Navegador' : 'WASM') + '</span>'];
     if (s.native) tags.push('<span class="pill ok">PC nativo</span>');
     if (s.needsBios) tags.push('<span class="pill warn">BIOS</span>');
     card.innerHTML =
       '<span class="sys-ico">' + escapeHtml(s.icon || '🎮') + '</span>' +
       '<span class="sys-info"><b>' + escapeHtml(s.name) + '</b><span class="sys-count">' +
-      s.count + (s.count === 1 ? ' jogo' : ' jogos') + '</span></span>' +
+      total + (total === 1 ? ' jogo' : ' jogos') + '</span></span>' +
       '<span class="sys-short">' + escapeHtml(s.short) + '</span>' +
       '<span class="sys-tags">' + tags.join('') + '</span>';
     card.addEventListener('click', function () { openSystem(s.id); });
@@ -1138,7 +1146,8 @@
       if (!r.ok) throw new Error('HTTP ' + r.status);
       return r.json();
     }).then(function (j) {
-      count.textContent = j.count + (j.count === 1 ? ' jogo' : ' jogos');
+      var totalGames = j.count + getLinks(sys.id).length;
+      count.textContent = totalGames + (totalGames === 1 ? ' jogo' : ' jogos');
       if (j.dir) {
         el('dir-view').textContent = j.dir;
         if (!el('dir-input').value) el('dir-input').value = j.dir;
@@ -1263,9 +1272,13 @@
     if (linksBox) Array.prototype.forEach.call(linksBox.querySelectorAll('.game-card'), function (c) {
       c.style.display = (!q || (c.dataset.name || '').indexOf(q) >= 0) ? '' : 'none';
     });
+    var linkCards = linksBox ? linksBox.querySelectorAll('.game-card') : [];
+    var shownLinks = 0;
+    Array.prototype.forEach.call(linkCards, function (c) { if (c.style.display !== 'none') shownLinks++; });
+    var total = cards.length + linkCards.length;
     var count = el('games-count');
-    if (q) count.textContent = shown + ' de ' + cards.length + ' jogos';
-    else count.textContent = cards.length + (cards.length === 1 ? ' jogo' : ' jogos');
+    if (q) count.textContent = (shown + shownLinks) + ' de ' + total + ' jogos';
+    else count.textContent = total + (total === 1 ? ' jogo' : ' jogos');
   }
 
   // -------------------------------------------------------------------- links
@@ -1408,9 +1421,67 @@
     box.innerHTML = '';
     if (!links.length) {
       box.innerHTML = '<div class="empty">Nenhum link salvo neste console ainda. Abra um jogo por <strong>link</strong> que ele aparece aqui.</div>';
-      return;
+    } else {
+      links.forEach(function (l) { box.appendChild(linkCard(sys, l)); });
     }
-    links.forEach(function (l) { box.appendChild(linkCard(sys, l)); });
+    if (currentSystem && currentSystem.id === sys.id) filterGames();
+  }
+
+  // Quantos jogos por link há neste console (contam como "disponíveis").
+  function linksCount(sysId) { return getLinks(sysId).length; }
+  function linksTotalCount() {
+    var all = readJSON(LS.links) || {};
+    var n = 0;
+    Object.keys(all).forEach(function (k) { if (Array.isArray(all[k])) n += all[k].length; });
+    return n;
+  }
+
+  // Backup da coleção COMPLETA (todos os consoles): baixa um JSON e, em outro
+  // aparelho, o mesmo arquivo restaura tudo de uma vez.
+  function exportLinksBackup() {
+    var all = readJSON(LS.links) || {};
+    if (!linksTotalCount()) { toast('Nenhum link salvo para exportar ainda.', 'warn'); return; }
+    var payload = { app: 'webemu', kind: 'links-backup', version: 1, exportedAt: new Date().toISOString(), links: all };
+    var blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'webemu-links-' + new Date().toISOString().slice(0, 10) + '.json';
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 0);
+    toast('Backup de <b>' + linksTotalCount() + '</b> jogo(s) por link exportado.', 'ok');
+  }
+
+  function importLinksBackup(file) {
+    var reader = new FileReader();
+    reader.onload = function () {
+      var data;
+      try { data = JSON.parse(String(reader.result || '')); } catch (e) { toast('Arquivo inválido (não é JSON).', 'err'); return; }
+      var incoming = (data && data.links) ? data.links : data;   // envelope ou objeto cru
+      if (!incoming || typeof incoming !== 'object' || Array.isArray(incoming)) { toast('Backup não reconhecido.', 'err'); return; }
+      var all = readJSON(LS.links) || {};
+      var added = 0;
+      Object.keys(incoming).forEach(function (sid) {
+        var arr = Array.isArray(incoming[sid]) ? incoming[sid] : [];
+        if (!arr.length) return;
+        var cur = Array.isArray(all[sid]) ? all[sid] : [];
+        arr.forEach(function (l) {
+          if (!l || !l.url) return;
+          if (cur.some(function (x) { return x && x.url === l.url; })) return;   // não duplica
+          cur.push({ url: l.url, name: l.name || linkName(l.url), addedAt: l.addedAt || Date.now(), lastPlayed: l.lastPlayed || 0 });
+          added++;
+        });
+        if (cur.length > 100) cur = cur.slice(0, 100);
+        all[sid] = cur;
+      });
+      writeJSON(LS.links, all);
+      loadSystems().catch(function () { if (systemsList.length) renderHub(); });
+      if (currentSystem) renderLinks(currentSystem);
+      var st = el('links-backup-status');
+      if (st) st.textContent = added ? ('✅ ' + added + ' link(s) restaurado(s)') : 'Nada novo';
+      toast(added ? ('Backup importado: <b>' + added + '</b> jogo(s) por link.') : 'Os links do backup já estavam aqui.', added ? 'ok' : 'info');
+    };
+    reader.readAsText(file);
   }
 
   // Reabre um link da coleção reaproveitando o fluxo de "Jogar por link".
@@ -3505,6 +3576,14 @@
     el('btn-open-external').addEventListener('click', function () { if (currentSystem) openExternal(currentSystem, null); });
     el('btn-bios-file').addEventListener('click', function () { el('bios-input').click(); });
     el('bios-input').addEventListener('change', function () { if (this.files && this.files[0]) handleBiosFile(this.files[0]); });
+
+    // 🔗 Links salvos: backup da coleção COMPLETA (todos os consoles).
+    el('btn-links-export').addEventListener('click', exportLinksBackup);
+    el('btn-links-import').addEventListener('click', function () { el('links-import-input').click(); });
+    el('links-import-input').addEventListener('change', function () {
+      if (this.files && this.files[0]) importLinksBackup(this.files[0]);
+      this.value = '';
+    });
 
     el('btn-change').addEventListener('click', changeGame);
     el('btn-restart').addEventListener('click', function () { location.reload(); });
