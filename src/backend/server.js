@@ -1075,8 +1075,13 @@ app.get('/api/rom', async (req, res) => {
     }
     if (!res.getHeader('content-type')) res.setHeader('Content-Type', 'application/octet-stream');
     res.setHeader('Cache-Control', 'no-store');
-    if (!upstream.body) return res.end();
-    Readable.fromWeb(upstream.body).pipe(res);
+    // Necessário quando a página roda em outra origem (site no Vercel + backend
+    // local) e para o EmulatorJS conseguir embutir/ler sob COEP require-corp.
+    res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Expose-Headers', 'Content-Length, Content-Range, Accept-Ranges');
+    if (upstream.body) Readable.fromWeb(upstream.body).pipe(res);
+    else res.end();
   } catch (error) {
     clearTimeout(timer);
     console.error('[ROM] Proxy falhou:', error.message);

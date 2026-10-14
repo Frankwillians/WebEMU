@@ -11,31 +11,50 @@
       --accent: #3b82f6; --accent-2: #22d3ee;
       --ok: #22c55e; --warn: #f59e0b; --err: #ef4444;
       --radius: 12px; --shadow: 0 10px 30px rgba(0,0,0,.45);
+      /* Altura real do cabeçalho — medida pelo JS. No celular os botões ficam em
+         linha própria, então um valor fixo (67px) deixava o player com a altura
+         errada e a tela do jogo não funcionava. */
+      --topbar-h: 67px;
     }
     * { box-sizing: border-box; }
+    html { -webkit-text-size-adjust: 100%; }
     body {
       margin: 0; min-height: 100vh;
       background: radial-gradient(1200px 600px at 50% -10%, #16233a 0%, #0b111c 60%);
       color: #e8eefc; font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+      -webkit-tap-highlight-color: transparent;
+      overscroll-behavior-y: contain;
     }
     .hidden { display: none !important; }
 
     /* topbar */
     .topbar {
-      display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
-      padding: 12px 18px; border-bottom: 1px solid #243044;
-      background: rgba(16,23,36,.85); backdrop-filter: blur(8px);
+      display: flex; align-items: center; gap: 10px;
+      padding: 10px 14px; padding-top: calc(10px + env(safe-area-inset-top));
+      border-bottom: 1px solid #243044;
+      background: rgba(16,23,36,.92); backdrop-filter: blur(10px);
       position: sticky; top: 0; z-index: 20;
     }
-    .brand { display: flex; align-items: center; gap: 12px; }
+    .brand { display: flex; align-items: center; gap: 10px; min-width: 0; flex: 0 1 auto; }
+    .brand-txt { min-width: 0; }
+    .brand-txt h1, .brand-txt small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .logo {
-      width: 42px; height: 42px; border-radius: 12px; display: grid; place-items: center;
-      background: linear-gradient(135deg, #2563eb, #7c3aed); font-size: 22px;
+      width: 38px; height: 38px; border-radius: 11px; display: grid; place-items: center;
+      background: linear-gradient(135deg, #2563eb, #7c3aed); font-size: 20px; flex: 0 0 auto;
       box-shadow: 0 6px 18px rgba(37,99,235,.4);
     }
-    .brand h1 { margin: 0; font-size: 18px; letter-spacing: -.3px; }
-    .brand small { color: #8b9ab3; font-size: 12px; }
-    .top-actions { margin-left: auto; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .brand h1 { margin: 0; font-size: 17px; letter-spacing: -.3px; }
+    .brand small { color: #8b9ab3; font-size: 11px; display: block; }
+    /* Ações: rolam na horizontal no celular em vez de empilhar (era isso que
+       estourava a altura do cabeçalho e quebrava a tela do jogo). */
+    .top-actions {
+      margin-left: auto; display: flex; align-items: center; gap: 6px;
+      flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none;
+      -webkit-overflow-scrolling: touch; max-width: 100%;
+    }
+    .top-actions::-webkit-scrollbar { display: none; }
+    .top-actions .btn { flex: 0 0 auto; }
+    .top-actions .ico { font-size: 15px; line-height: 1; }
 
     .badge {
       display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600;
@@ -156,12 +175,24 @@
     .foot { color: #7c8aa5; font-size: 12px; margin-top: 26px; text-align: center; line-height: 1.6; }
     code { background: #1b2740; padding: 1px 6px; border-radius: 6px; }
 
-    /* player */
-    .player { display: flex; flex-direction: column; height: calc(100vh - 67px); }
-    .player-bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 9px 14px; border-bottom: 1px solid #243044; background: #101827; }
-    .player-bar .name { font-size: 13px; font-weight: 700; max-width: 42vw; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    /* player — altura calculada com a altura REAL do cabeçalho (--topbar-h) e
+       usando dvh (a barra de endereço do celular some/volta e o 100vh ficaria
+       maior que a tela visível, cortando o jogo). */
+    .player { display: flex; flex-direction: column; height: calc(100vh - var(--topbar-h)); height: calc(100dvh - var(--topbar-h)); }
+    .player-bar {
+      display: flex; align-items: center; gap: 8px; flex-wrap: nowrap;
+      overflow-x: auto; scrollbar-width: none;
+      padding: 8px 12px; padding-left: calc(12px + env(safe-area-inset-left));
+      padding-right: calc(12px + env(safe-area-inset-right));
+      border-bottom: 1px solid #243044; background: #101827;
+    }
+    .player-bar::-webkit-scrollbar { display: none; }
+    .player-bar .btn { flex: 0 0 auto; }
+    .player-bar .name { font-size: 13px; font-weight: 700; max-width: 40vw; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 0 0 auto; }
+    .player-bar .badge { flex: 0 0 auto; }
     .game-wrap { flex: 1; min-height: 0; position: relative; background: #000; }
     #game { position: absolute; inset: 0; }
+    #game canvas { width: 100% !important; height: 100% !important; display: block; }
     .loading-overlay { position: absolute; inset: 0; display: grid; place-items: center; background: rgba(5,8,14,.85); text-align: center; padding: 20px; z-index: 10; }
     .spinner { width: 42px; height: 42px; border-radius: 50%; border: 4px solid rgba(255,255,255,.15); border-top-color: #3b82f6; animation: spin .9s linear infinite; margin: 0 auto 14px; }
     @keyframes spin { to { transform: rotate(360deg); } }
@@ -200,12 +231,39 @@
     .np-pill { padding: 10px 16px; border-radius: 999px; }
     .np-center { display: flex; flex-direction: column; gap: 8px; align-self: center; }
 
-    @media (max-width: 640px) {
-      .brand h1 { font-size: 16px; }
-      .launcher { padding: 16px 12px 48px; }
+    /* ===================== MOBILE (o que estava quebrado) ================== */
+    @media (max-width: 720px) {
+      .brand h1 { font-size: 15px; }
+      .brand small { display: none; }               /* ganha linha no celular */
+      .logo { width: 32px; height: 32px; font-size: 17px; border-radius: 9px; }
+      .topbar { gap: 8px; padding: 8px 10px; }
+      /* botões só com ícone: cabem todos na mesma linha */
+      .top-actions .lbl { display: none; }
+      .top-actions .btn { padding: 8px 9px; }
+      .top-actions .badge { padding: 4px 8px; font-size: 11px; }
+      #backend-badge .dot { width: 7px; height: 7px; }
+      .launcher { padding: 14px 10px 44px; }
       .sys-row { grid-template-columns: 1fr; }
+      .grid { grid-template-columns: 1fr; }
+      /* capas: 3 por linha no celular, formato de caixa de jogo */
+      .games-grid { grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 9px; }
+      .game-cover { aspect-ratio: 3 / 4; }
+      .game-cover .fallback { font-size: 26px; }
+      .game-name { font-size: 11px; min-height: 28px; }
+      .game-actions .btn { padding: 6px 3px; font-size: 11px; }
+      .player-bar .name { max-width: 34vw; font-size: 12px; }
       .np-dpad { grid-template-columns: repeat(3, 42px); grid-template-rows: repeat(3, 42px); }
       .np-cluster { grid-template-columns: repeat(2, 48px); grid-auto-rows: 48px; }
+      .np-pad { padding: 10px calc(10px + env(safe-area-inset-right)) calc(12px + env(safe-area-inset-bottom)) calc(10px + env(safe-area-inset-left)); }
+      .toasts { right: 10px; left: 10px; bottom: calc(10px + env(safe-area-inset-bottom)); max-width: none; }
+      .list { max-height: 220px; }
+      .panel { margin: 10px 8px; padding: 12px; }
+      .input { min-width: 0; }
+    }
+    /* celulares bem pequenos */
+    @media (max-width: 380px) {
+      .top-actions .badge { display: none; }
+      .games-grid { grid-template-columns: repeat(2, 1fr); }
     }
   </style>
 </head>
@@ -213,17 +271,17 @@
 <header class="topbar">
   <div class="brand">
     <span class="logo">🎮</span>
-    <div>
+    <div class="brand-txt">
       <h1>Central de Emulação</h1>
       <small id="brand-sub">Carregando…</small>
     </div>
   </div>
-  <div class="top-actions">
+  <div class="top-actions" id="top-actions">
     <span id="backend-badge" class="badge"><span class="dot"></span> Servidor…</span>
-    <button id="btn-server-toggle" class="btn sm" type="button">🌐 Servidor</button>
-    <button id="btn-lobby-toggle" class="btn sm" type="button">👥 Jogar em rede</button>
-    <button id="btn-np-stream" class="btn sm hidden" type="button" title="Abrir/parar a transmissão da sala">📡 Transmissão</button>
-    <button id="btn-home" class="btn sm hidden" type="button">🏠 Consoles</button>
+    <button id="btn-server-toggle" class="btn sm" type="button" title="Servidores e pastas da rede"><span class="ico">🌐</span><span class="lbl">Servidor</span></button>
+    <button id="btn-lobby-toggle" class="btn sm" type="button" title="Jogar em rede (netplay)"><span class="ico">👥</span><span class="lbl">Jogar em rede</span></button>
+    <button id="btn-np-stream" class="btn sm hidden" type="button" title="Abrir/parar a transmissão da sala"><span class="ico">📡</span><span class="lbl">Transmissão</span></button>
+    <button id="btn-home" class="btn sm hidden" type="button" title="Voltar aos consoles"><span class="ico">🏠</span><span class="lbl">Consoles</span></button>
   </div>
 </header>
 
@@ -507,6 +565,22 @@
  * ========================================================================= */
 (function () {
   'use strict';
+
+  // ------------------------------------------------------- altura do cabeçalho
+  // A barra do topo muda de altura (no celular os botões ficam em linha própria,
+  // em alguns navegadores a barra de endereço some...). Medimos e guardamos numa
+  // variável CSS para o player ocupar EXATAMENTE o espaço que sobra — sem isso
+  // a tela do jogo ficava cortada no celular.
+  function medirTopbar() {
+    var t = document.querySelector('.topbar');
+    if (!t) return;
+    var h = Math.round(t.getBoundingClientRect().height);
+    if (h > 0) document.documentElement.style.setProperty('--topbar-h', h + 'px');
+  }
+  window.addEventListener('resize', medirTopbar);
+  window.addEventListener('orientationchange', function () { setTimeout(medirTopbar, 250); });
+  if (document.readyState !== 'loading') medirTopbar();
+  else document.addEventListener('DOMContentLoaded', medirTopbar);
 
   var IS_FILE = location.protocol === 'file:';
   var EJS_CDN = 'https://cdn.emulatorjs.org/stable/data/';
@@ -1922,76 +1996,29 @@
     var pass = (el('np-room-pass') && el('np-room-pass').value) || '';
     var isPrivate = !!(el('np-private') && el('np-private').checked);
 
-    // Verifica qual modo está selecionado (URL ou Lobby)
-    var useUrlMode = !!(el('np-url-mode') && el('np-url-mode').checked);
-
     NP.isHost = true;
     NP.roomId = code;
     npSetStatus('Criando sala…');
 
-    if (useUrlMode) {
-      // Modo URL: gera oferta SDP e monta link para compartilhar
-      npSetStatus('Gerando oferta de conexão…');
-      npUrlCreateOffer().then(function (result) {
-        NP.npUrlCode = code;
-        NP.npUrlSdp = result.sdp;
-        NP.npPeerConnection = result.peerConnection;
-
-        // Monta o link: room + sdp base64
-        var shareUrl = window.location.origin + '/play.html?room=' + code + '&sdp=' + result.sdp;
-
-        // Exibe o link para copiar
-        el('np-url-share').value = shareUrl;
-        el('np-url-link-row').style.display = 'block';
-
-        npSetStatus('Sala URL criada! Código: ' + code);
-        toast('Sala URL criada! Compartilhe o link abaixo:', 'info');
-
-        // Define evento do botão copiar
-        if (!el('btn-np-copy-url-created')) {
-          el('btn-np-copy-url-created') = true;
-          el('btn-np-copy-url').replaceWith(function () {
-            var btn = document.createElement('button');
-            btn.id = 'btn-np-copy-url-created';
-            btn.className = 'btn sm tiny';
-            btn.style.margin = '4px 0 0 4px';
-            btn.textContent = '🔗';
-            btn.addEventListener('click', function () {
-              el('np-url-share').select();
-              document.execCommand('copy');
-              toast('Link copiado!', 'sucess');
-            });
-            return btn;
-          });
-        }
-
-        npSetStatus('Sala aberta - esperando convidado pelo link.');
-      }).catch(function (e) {
-        npSetStatus('Erro ao gerar oferta.');
-        toast('Erro ao gerar oferta de conexão: ' + (e && e.message ? e.message : e), 'err');
-      });
-    } else {
-      // Modo Lobby (WebSocket) - comportamento antigo
-      NP.isHost = true;
-      NP.roomId = code;
-      npConnect().then(function () {
-        npSend({
-          type: 'join',
-          payload: {
-            roomId: code, playerIndex: 0, password: pass,
-            metadata: {
-              name: roomName, system: 'snes', systemName: 'SNES',
-              gameName: '', host: name, public: !isPrivate, maxPlayers: 4, started: false
-            }
+    // Uma única forma de criar sala: pelo sinalizador (🏠 LAN ou 🌐 Online —
+    // escolhido no seletor acima). O convidado entra pelo link/código.
+    npConnect().then(function () {
+      npSend({
+        type: 'join',
+        payload: {
+          roomId: code, playerIndex: 0, password: pass,
+          metadata: {
+            name: roomName, system: 'snes', systemName: 'SNES',
+            gameName: '', host: name, public: !isPrivate, maxPlayers: 4, started: false
           }
-        });
-        npSetStatus((isPrivate ? 'Sala privada ' : 'Sala ') + code + ' aberta');
-      }).catch(function (e) {
-        NP.roomId = null; NP.isHost = false;
-        npSetStatus('Sem conexão');
-        toast(escapeHtml(e && e.message ? e.message : e), 'err');
+        }
       });
-    }
+      npSetStatus((isPrivate ? 'Sala privada ' : 'Sala ') + code + ' aberta');
+    }).catch(function (e) {
+      NP.roomId = null; NP.isHost = false;
+      npSetStatus('Sem conexão');
+      toast(escapeHtml(e && e.message ? e.message : e), 'err');
+    });
   }
 
   function npJoinRoom(roomId, password) {

@@ -5,13 +5,19 @@
  * Este arquivo expõe TODO o backend Express em `/api/*` reaproveitando o
  * `server.js` (que só chama `app.listen` quando NÃO está na Vercel).
  *
- * IMPORTANTE (correção): em alguns roteamentos a Vercel entrega o caminho
- * "incompleto" em `req.url` (por exemplo apenas o primeiro segmento). Com isso o
- * Express não encontra as rotas de VÁRIOS segmentos — `/api/netplay/ice`,
- * `/api/systems/:id/games`, `/api/systems/:id/cover`… — e devolve 404, enquanto
- * `/api/health` (um segmento) funciona. Os parâmetros do catch-all chegam em
- * `req.query.all`; com eles reconstruímos o caminho correto antes de chamar o
- * Express. Funciona nos dois casos: se o caminho já estiver certo, não muda nada.
+ * ---------------------------------------------------------------- CORREÇÃO ---
+ * Descoberto na prática (rota /api/debug): a Vercel entrega o "resto" do caminho
+ * como um PARÂMETRO DE QUERY chamado "...all" — com os três pontos! Ou seja:
+ *
+ *   GET /api/netplay/ice          →  req.url = "/api/netplay?...all=ice"
+ *   GET /api/systems/ps1/games    →  req.url = "/api/systems?...all=ps1/games"
+ *   GET /api/health               →  req.url = "/api/health?...all=health"
+ *
+ * Sem corrigir, o Express só vê "/api/netplay" (um segmento) e não encontra as
+ * rotas de VÁRIOS segmentos — /api/netplay/ice, /api/systems/:id/games,
+ * /api/systems/:id/cover… — devolvendo 404, enquanto as de um segmento
+ * (/api/health, /api/systems) funcionavam. Aqui reconstruímos o caminho correto
+ * antes de entregar ao Express.
  */
 import app from '../src/backend/server.js';
 
@@ -19,20 +25,39 @@ export default function handler(req, res) {
   try {
     globalThis.__webemuLastReq = {
       url: req.url,
-      queryAll: req.query && req.query.all,
       at: new Date().toISOString()
     };
   } catch { /* ignora */ }
 
   try {
-    const all = req.query && req.query.all;
-    if (Array.isArray(all) && all.length) {
-      const rest = all.map((s) => decodeURIComponent(String(s))).join('/');
-      const url = String(req.url || '');
-      const qi = url.indexOf('?');
-      const qs = qi >= 0 ? url.slice(qi) : '';
-      const corrigido = '/api/' + rest + qs;
-      if (corrigido !== req.url) req.url = corrigido;
+    const q = req.query || {};
+    // A Vercel usa "...all" (com pontos). Mantemos "all" como fallback.
+    const raw = (q['...all'] !== undefined && q['...all'] !== null) ? q['...all'] : q.all;
+
+    if (raw !== undefined && raw !== null) {
+      const rest = Array.isArray(raw) ? raw.join('/') : String(raw);
+
+      if (rest) {
+        // Remonta a query real, sem o parâmetro do catch-all.
+        const params = [];
+        for (const k of Object.keys(q)) {
+          if (k === '...all' || k === 'all') continue;
+          const v = q[k];
+          const vals = Array.isArray(v) ? v : [v];
+          vals.forEach((x) => params.push(encodeURIComponent(k) + '=' + encodeURIComponent(x)));
+        }
+        const qs = params.length ? '?' + params.join('&') : '';
+
+        // Junta o caminho que a Vercel manteve com o resto que veio em "...all",
+        // Sem repetir segmento (o Vercel às vezes repete o 1º, às vezes não).
+        const urlAtual = String(req.url || '').split('?')[0];
+        const segs = urlAtual.split('/').filter(Boolean);
+        for (const s of rest.split('/').filter(Boolean)) {
+          if (segs[segs.length - 1] !== s) segs.push(s);
+        }
+        const corrigido = '/' + segs.join('/') + qs;
+        if (corrigido !== req.url) req.url = corrigido;
+      }
     }
   } catch {
     /* se der qualquer coisa, segue com o caminho que veio */
