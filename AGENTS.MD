@@ -295,7 +295,15 @@ Mídia e inputs:    WebRTC (P2P) — o HOST emula e transmite; convidados só ma
   IIFE, `var`, funções `npAlgumaCoisa` para netplay, `el('id')` para DOM.
 - **Não introduza bundler nem dependências no `play.html`.**
 - Preserve acessibilidade e responsividade (o mobile é cidadão de 1ª classe).
-- Estados persistidos em `localStorage` usam chaves com prefixo `np_`.
+- Estados persistidos em `localStorage` usam o prefixo `ps1emu.` (ex.:
+  `ps1emu.session`, `ps1emu.links`); chaves só do netplay usam `np_` (`np_pad`,
+  `np_gamepad_idx`, `np_session_token`).
+- **Coleção de links salvos:** todo jogo aberto por URL é catalogado por console
+  em `localStorage['ps1emu.links']` (`{ [systemId]: [{ url, name, addedAt,
+  lastPlayed }] }`). `saveLink` é idempotente por URL (rejogar não duplica) e
+  `renderLinks`/`linkCard` desenham a grade (capa via `coverUrlByName`);
+  `playSavedLink` reusa `playByUrl`. Fica no cartão **🔗 Links salvos** de cada
+  console, com renomear (✏️) e remover (🗑).
 - Ao mexer em UI, **valide o balanceamento de tags** (ver §11).
 
 ### Estilo geral

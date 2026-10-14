@@ -81,6 +81,14 @@ GET /api/rom?url=https://exemplo.com/jogo.zip
 Range: bytes=0-          # opcional (retomada/seek)
 ```
 
+> **Coleção de links salvos.** Todo jogo aberto por link é catalogado
+> automaticamente **por console** em `localStorage` (`ps1emu.links`), com capa e
+> nome. Ele reaparece no cartão **🔗 Links salvos** daquele console — dá para
+> rejogar (▶), renomear (✏️) ou remover (🗑) a qualquer momento. Rejogar o mesmo
+> link **não** duplica (a chave é a própria URL), e cada navegador guarda a sua
+> coleção (nada vai para o servidor).
+
+
 ### ▲ Deploy na Vercel
 
 O projeto já vem preparado para a Vercel (site estático + funções):

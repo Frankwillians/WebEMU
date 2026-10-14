@@ -159,6 +159,11 @@
     .game-actions { display: flex; gap: 6px; margin-top: auto; }
     .game-actions .btn { flex: 1; justify-content: center; padding: 6px 4px; }
 
+    /* Coleção de links salvos (jogos abertos por URL, por console) */
+    .game-card.is-link { border-color: #1e40af88; }
+    .link-badge { position: absolute; top: 6px; right: 6px; z-index: 2; font-size: 10px; padding: 2px 7px;
+      border-radius: 999px; background: rgba(8,14,24,.85); border: 1px solid #2b3a52; color: #93c5fd; }
+
     /* Multi-disco (.m3u): seleção de discos na grade */
     .m3u-pick { position: absolute; top: 6px; left: 6px; z-index: 2; width: 20px; height: 20px; margin: 0; cursor: pointer; accent-color: #3b82f6; display: none; }
     .games-grid.m3u-mode .m3u-pick { display: block; }
@@ -560,6 +565,12 @@
       <p class="hint" id="rom-url-note"></p>
     </section>
 
+    <section class="card" id="card-links">
+      <h2><span class="ico">🔗</span> Links salvos</h2>
+      <p class="hint">Todo jogo aberto por <strong>link</strong> é catalogado aqui automaticamente — separado por console, com capa — e fica disponível para jogar de novo quando quiser.</p>
+      <div id="links-list" class="games-grid"><div class="empty">Nenhum link salvo neste console ainda.</div></div>
+    </section>
+
     <section class="card" id="card-wasm">
       <h2><span class="ico">🧠</span> Núcleo (navegador)</h2>
       <p class="hint">Escolha o núcleo do EmulatorJS. Trocar exige reiniciar o jogo.</p>
@@ -684,6 +695,7 @@
     cores: 'ps1emu.cores',
     modes: 'ps1emu.modes',
     romProxy: 'ps1emu.romProxy',
+    links: 'ps1emu.links',
     npName: 'ps1emu.npName',
     npWsMode: 'ps1emu.npWsMode',
     npWsUrl: 'ps1emu.npWsUrl',
@@ -1384,8 +1396,8 @@
 
   // URL da capa (proxy do servidor, que busca no libretro-thumbnails).
   // No Vercel (HTTPS) com backend local (HTTP), usa proxy Vercel para evitar Mixed Content.
-  function coverUrl(sys, g) {
-    var base = (g.name || g.fileName || '').replace(/\.[^.]+$/, '');
+  function coverUrlByName(sys, name) {
+    var base = String(name || '').replace(/\.[^.]+$/, '');
     var localBase = getApiBase();
     var needsProxy = location.protocol === 'https:' && /^http:/i.test(localBase);
     if (needsProxy) {
@@ -1416,7 +1428,7 @@
     img.crossOrigin = 'anonymous';
     img.onload = function () { img.classList.add('loaded'); };
     img.onerror = function () { img.remove(); };
-    img.src = coverUrl(sys, g);
+    img.src = coverUrlByName(sys, g.name || g.fileName);
     cover.appendChild(fb);
     cover.appendChild(img);
 
@@ -1483,9 +1495,166 @@
       c.style.display = ok ? '' : 'none';
       if (ok) shown++;
     });
+    // A mesma busca filtra a coleção de links salvos (grade separada).
+    var linksBox = el('links-list');
+    if (linksBox) Array.prototype.forEach.call(linksBox.querySelectorAll('.game-card'), function (c) {
+      c.style.display = (!q || (c.dataset.name || '').indexOf(q) >= 0) ? '' : 'none';
+    });
     var count = el('games-count');
     if (q) count.textContent = shown + ' de ' + cards.length + ' jogos';
     else count.textContent = cards.length + (cards.length === 1 ? ' jogo' : ' jogos');
+  }
+
+  // -------------------------------------------------------------------- links
+  // Coleção de links por console: todo jogo aberto por URL é catalogado aqui
+  // (persistido em localStorage) com capa e nome, separado por console, para ser
+  // reaberto a qualquer momento — sem reinstalar nada.
+  function getLinks(sysId) {
+    var all = readJSON(LS.links) || {};
+    var arr = all[sysId];
+    return Array.isArray(arr) ? arr : [];
+  }
+  function setLinks(sysId, arr) {
+    var all = readJSON(LS.links) || {};
+    if (arr && arr.length) all[sysId] = arr; else delete all[sysId];
+    writeJSON(LS.links, all);
+  }
+  // Nome legível a partir do próprio link (último segmento do caminho).
+  function linkName(url) {
+    try {
+      var u = new URL(url, location.href);
+      var parts = u.pathname.split('/').filter(Boolean);
+      return decodeURIComponent(parts[parts.length - 1] || '') || u.host;
+    } catch (e) { return 'Jogo por link'; }
+  }
+  function linkHost(url) {
+    try { return new URL(url, location.href).host; } catch (e) { return ''; }
+  }
+
+  // Adiciona (ou atualiza) um link na coleção do console. Idempotente por URL:
+  // rejogar não duplica; só atualiza o "último acesso".
+  function saveLink(sys, url, name) {
+    if (!sys || !url) return;
+    var arr = getLinks(sys.id);
+    var found = null;
+    for (var i = 0; i < arr.length; i++) { if (arr[i].url === url) { found = arr[i]; break; } }
+    if (found) {
+      found.lastPlayed = Date.now();
+      if (!found.name) found.name = name || linkName(url);
+    } else {
+      arr.unshift({ url: url, name: name || linkName(url), addedAt: Date.now(), lastPlayed: Date.now() });
+      if (arr.length > 100) arr = arr.slice(0, 100);
+      toast('Link salvo em <b>🔗 Links salvos</b>.', 'ok');
+    }
+    setLinks(sys.id, arr);
+    if (currentSystem && currentSystem.id === sys.id) renderLinks(sys);
+  }
+
+  function removeLink(sys, url) {
+    setLinks(sys.id, getLinks(sys.id).filter(function (l) { return l.url !== url; }));
+    renderLinks(sys);
+  }
+
+  function renameLink(sys, url) {
+    var arr = getLinks(sys.id);
+    var found = null;
+    for (var i = 0; i < arr.length; i++) { if (arr[i].url === url) { found = arr[i]; break; } }
+    if (!found) return;
+    var novo = window.prompt('Nome do jogo:', found.name || '');
+    if (novo === null) return;
+    novo = novo.trim();
+    if (!novo) return;
+    found.name = novo;
+    setLinks(sys.id, arr);
+    renderLinks(sys);
+  }
+
+  // Cartão de um link salvo: capa + nome + host + ações (jogar/renomear/remover).
+  function linkCard(sys, link) {
+    var card = document.createElement('div');
+    card.className = 'game-card is-link';
+    card.dataset.name = String(link.name || '').toLowerCase();
+    card.style.setProperty('--c', sys.color || '#3b82f6');
+
+    var cover = document.createElement('div');
+    cover.className = 'game-cover';
+    var fb = document.createElement('span');
+    fb.className = 'fallback';
+    fb.textContent = sys.icon || '🎮';
+    var badge = document.createElement('span');
+    badge.className = 'link-badge';
+    badge.textContent = '🔗 link';
+    var img = document.createElement('img');
+    img.alt = '';
+    img.loading = 'lazy';
+    img.crossOrigin = 'anonymous';
+    img.onerror = function () { img.remove(); };
+    img.onload = function () { img.classList.add('loaded'); };
+    img.src = coverUrlByName(sys, link.name || linkName(link.url));
+    cover.appendChild(fb);
+    cover.appendChild(img);
+    cover.appendChild(badge);
+
+    var body = document.createElement('div');
+    body.className = 'game-body';
+    var name = document.createElement('div');
+    name.className = 'game-name';
+    name.title = link.url;
+    name.textContent = link.name || linkName(link.url);
+    var meta = document.createElement('div');
+    meta.className = 'game-meta';
+    meta.textContent = '🔗 ' + (linkHost(link.url) || 'link');
+    var actions = document.createElement('div');
+    actions.className = 'game-actions';
+
+    var play = document.createElement('button');
+    play.type = 'button';
+    play.className = 'btn sm primary';
+    play.textContent = '▶ Jogar';
+    play.onclick = function () { playSavedLink(sys, link); };
+
+    var ren = document.createElement('button');
+    ren.type = 'button';
+    ren.className = 'btn sm';
+    ren.title = 'Renomear';
+    ren.textContent = '✏️';
+    ren.onclick = function () { renameLink(sys, link.url); };
+
+    var del = document.createElement('button');
+    del.type = 'button';
+    del.className = 'btn sm';
+    del.title = 'Remover da coleção';
+    del.textContent = '🗑';
+    del.onclick = function () { removeLink(sys, link.url); };
+
+    actions.appendChild(play);
+    actions.appendChild(ren);
+    actions.appendChild(del);
+    body.appendChild(name);
+    body.appendChild(meta);
+    body.appendChild(actions);
+    card.appendChild(cover);
+    card.appendChild(body);
+    return card;
+  }
+
+  function renderLinks(sys) {
+    var box = el('links-list');
+    if (!box) return;
+    var links = getLinks(sys.id);
+    box.innerHTML = '';
+    if (!links.length) {
+      box.innerHTML = '<div class="empty">Nenhum link salvo neste console ainda. Abra um jogo por <strong>link</strong> que ele aparece aqui.</div>';
+      return;
+    }
+    links.forEach(function (l) { box.appendChild(linkCard(sys, l)); });
+  }
+
+  // Reabre um link da coleção reaproveitando o fluxo de "Jogar por link".
+  function playSavedLink(sys, link) {
+    var input = el('rom-url');
+    if (input) input.value = link.url;
+    playByUrl();
   }
 
   // --------------------------------------------------------------- launching
@@ -1527,6 +1696,8 @@
     var proxy = !!(el('rom-url-proxy') && el('rom-url-proxy').checked) || precisaProxy();
     var parts = abs.pathname.split('/').filter(Boolean);
     var fileName = parts.length ? decodeURIComponent(parts[parts.length - 1]) : 'jogo.iso';
+    // Cataloga o link na coleção do console (persistida) antes de abrir.
+    saveLink(sys, abs.href, fileName);
     if (sys.kind === 'external') {
       // PS2 (Play! .js) tem página própria.
       openExternal(sys, { url: abs.href, fileName: fileName, name: fileName, size: 0 });
@@ -1834,6 +2005,7 @@
     show(el('view-system'));
     hide(el('view-player'));
     show(el('btn-home'));
+    renderLinks(sys);
     loadGames(sys);
     window.scrollTo(0, 0);
   }
