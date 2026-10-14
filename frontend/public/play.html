@@ -2038,6 +2038,26 @@
     delete NP.peers[p.id];
     NP.players = NP.players.filter(function (x) { return x.id !== p.id; });
     npRenderRoom();
+    
+    // SE EU FUI EXPULSO/CAÍ: limpa todo estado local para poder reentrar limpo
+    if (p.id === NP.myId) {
+      npAppendChat('', 'Você saiu da sala ' + NP.roomId + '.', false, true);
+      npPararTransmissao(); // para stream, fecha PCs, limpa vídeo
+      NP.roomId = null;
+      NP.myId = null;
+      NP.myPlayerIndex = 0;
+      NP.isHost = false;
+      NP.players = [];
+      NP.peers = {};
+      NP.remoteStream = null;
+      NP.streamVersion = 0;
+      // Volta ao hub (seletor de consoles) — a sala continua existindo no servidor
+      showHub();
+      if (el('lobby-panel')) el('lobby-panel').classList.add('hidden');
+      toast('Você foi removido da sala. Pode entrar novamente se quiser.', 'warn');
+      return; // não processa host-changed abaixo
+    }
+    
     if (p.wasHost && p.id !== NP.myId) {
       // O host saiu, mas a sala CONTINUA: o servidor passa a vez para outro
       // jogador e avisa por 'host-changed' (tratado em npOnHostChanged).
@@ -2451,6 +2471,16 @@
   }
 
   function npShowGuest() {
+    // Limpa estado de peer connections anterior (evita "Aguardando o host" preso
+    // de conexão velha quando o jogador reentra na sala ou host migra).
+    for (var id in NP.peers) {
+      var e = NP.peers[id];
+      if (e && e.pc) { try { e.pc.close(); } catch (err) {} }
+      e.pc = null; e.dc = null; e.connected = false; e.retries = 0; e.streamVersion = 0;
+    }
+    NP.remoteStream = null;
+    if (el('np-video')) { try { el('np-video').pause(); } catch (e) {} el('np-video').srcObject = null; }
+
     hide(el('view-hub')); hide(el('view-system'));
     show(el('view-player')); show(el('btn-home'));
     if (el('lobby-panel')) el('lobby-panel').classList.add('hidden');
@@ -2922,27 +2952,32 @@
   // carrega (o canvas do emulador passa a existir), começamos a transmitir para
   // quem já está na sala — e refazemos a oferta para quem já estava conectado,
   // porque a trilha anterior ficou morta na troca de jogo.
+  // Guarda para evitar múltiplas tentativas simultâneas.
+  var npRecheckBusy = false;
   function npHostRecheckStream() {
     if (!NP.roomId || !NP.isHost) return;
+    if (npRecheckBusy) return; // já tem uma tentativa rodando
+    npRecheckBusy = true;
     var tentativas = 0;
     var MAX = 40; // ~48s insistindo até o canvas do emulador aparecer
     (function tentar() {
-      if (!NP.roomId || !NP.isHost) return;
-      if (tentativas >= MAX) { npSetStatus('Não foi possível capturar a tela do jogo.'); return; }
+      if (!NP.roomId || !NP.isHost) { npRecheckBusy = false; return; }
+      if (tentativas >= MAX) { npSetStatus('Não foi possível capturar a tela do jogo.'); npRecheckBusy = false; return; }
       tentativas++;
       if (tentativas > 1) { setTimeout(tentar, 1200); return; }
       avancar();
     })();
     function avancar() {
-      if (!NP.roomId || !NP.isHost) return;
+      if (!NP.roomId || !NP.isHost) { npRecheckBusy = false; return; }
       npHostStartStream(true).then(function () {
         // Recria TODAS as peer connections (stream novo = tracks novas = PCs novos)
         var ids = Object.keys(NP.peers);
-        if (!ids.length) return;
+        if (!ids.length) { npRecheckBusy = false; return; }
         ids.forEach(function (id) {
           if (NP.peers[id]) npHostCreateOffer(id);
         });
         npSetStatus('Transmitindo a partida para ' + ids.length + ' jogador(es).');
+        npRecheckBusy = false;
       }).catch(function () { tentativas--; setTimeout(tentar, 1200); });
     }
   }
@@ -2963,21 +2998,24 @@
       if (e.candidate) npSend({ type: 'ice-candidate', targetId: peerId, payload: { candidate: e.candidate } });
     };
     pc.onconnectionstatechange = function () {
-      entry.connected = pc.connectionState === 'connected';
+      var state = pc.connectionState;
+      entry.connected = state === 'connected';
       if (entry.connected) entry.retries = 0;
       npRenderRoom();
       if (!isHost) {
-        // Convidado: se a conexão caiu (ex.: o host trocou de jogo ou parou a
-        // transmissão), mostra o aviso de novo em vez de deixar o vídeo congelado.
+        // Convidado: mostra "Aguardando o host" só se a conexão FALHOU ou FECHOU
+        // de vez (não durante "disconnected" temporário por ICE restart/renegociação).
         var msg = el('np-stage-msg');
         if (msg) {
           if (entry.connected) { msg.style.display = 'none'; }
-          else { msg.style.display = ''; msg.textContent = 'Aguardando o host…'; }
+          else if (state === 'failed' || state === 'closed') {
+            msg.style.display = ''; msg.textContent = 'Aguardando o host…';
+          }
         }
         var v = el('np-video');
-        if (v && !entry.connected) { try { v.pause(); } catch (e) {} }
+        if (v && !entry.connected && (state === 'failed' || state === 'closed')) { try { v.pause(); } catch (e) {} }
       }
-      if (isHost && (pc.connectionState === 'failed' || pc.connectionState === 'disconnected')) {
+      if (isHost && (state === 'failed' || state === 'disconnected')) {
         entry.retries = (entry.retries || 0) + 1;
         if (entry.retries <= 3 && NP.roomId && NP.isHost) {
           setTimeout(function () { if (NP.roomId && NP.isHost && NP.peers[peerId]) npHostCreateOffer(peerId); }, 1500);
@@ -3069,6 +3107,9 @@
         var pr = v.play();
         if (pr && pr.catch) pr.catch(function () {});
       }
+      // Esconde mensagem de espera — track de vídeo chegou = conexão ativa
+      var msg = el('np-stage-msg');
+      if (msg) msg.style.display = 'none';
     } else if (track.kind === 'audio') {
       // Áudio: adiciona ao stream existente (pode haver múltiplos, mas geralmente só 1)
       if (!NP.remoteStream) NP.remoteStream = new MediaStream();
@@ -3080,8 +3121,6 @@
       var v = el('np-video');
       if (v && v.srcObject !== NP.remoteStream) v.srcObject = NP.remoteStream;
     }
-    var msg = el('np-stage-msg');
-    if (msg) msg.style.display = 'none';
   }
 
   function npOnInput(ev) {
