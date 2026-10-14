@@ -24,6 +24,34 @@
 
 ---
 
+## 0.5 Princípios de engenharia (obrigatórios)
+
+Estas regras valem para **toda** mudança, sem exceção. Em caso de dúvida entre
+duas soluções, escolha a que respeita estes princípios.
+
+1. **Não preserve compatibilidade retroativa.** Remova caminhos obsoletos em vez
+   de adicionar camadas de compatibilidade, *fallbacks* ou migrações.
+2. **Escolha a implementação mais simples que atenda por completo aos requisitos
+   atuais.** Evite abstrações especulativas, configuração e indireção.
+3. **Cresça o sistema em camadas.** Comece pela menor versão que funciona de
+   ponta a ponta e adicione cada nova capacidade sobre um produto que **já
+   funciona**. Nunca troque um produto que funciona por complexidade inacabada.
+4. **Mantenha os componentes modulares e as responsabilidades claramente
+   separadas.**
+5. **Prefira bibliotecas consolidadas e bem mantidas** quando elas reduzem a
+   complexidade total ou aumentam a confiabilidade. Não reimplemente
+   funcionalidades comuns sem um motivo claro.
+6. **Apoie-se nas dependências que o projeto já tem** antes de escrever a sua
+   própria implementação ou adicionar pacotes. Não presuma que uma biblioteca não
+   tem uma capacidade sem antes checar a documentação e os tipos.
+7. **Tome decisões arquiteturais pensando no longo prazo.** Não aceite um
+   paliativo que só funciona agora e que já nasce para ser substituído depois.
+
+> As "invariantes que não se regridem" do §9 são **requisitos atuais**, não
+> legado — mantê-las é compatível com o princípio 1.
+
+---
+
 ## 1. Visão geral
 
 **WebEMU** é uma **Central de Emulação** multi-console que roda **no navegador**
