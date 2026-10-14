@@ -531,11 +531,11 @@
         <input id="game-filter" class="input" type="search" placeholder="🔎 Buscar jogo pelo nome…" spellcheck="false" />
       </div>
       <div id="games-list" class="games-grid"><div class="empty">Carregando…</div></div>
-      <div class="row">
+      <div class="row" id="dir-row">
         <input id="dir-input" class="input" type="text" placeholder="Pasta de jogos no servidor" spellcheck="false" />
         <button id="btn-save-dir" class="btn sm" type="button">Salvar</button>
       </div>
-      <p class="hint">Pasta: <span id="dir-view" class="lan-url">—</span></p>
+      <p class="hint" id="dir-hint">Pasta: <span id="dir-view" class="lan-url">—</span></p>
     </section>
 
     <section class="card" id="card-external">
@@ -722,6 +722,10 @@
 
   // --------------------------------------------------------------- backend
   var backendOk = false;
+  // O backend sabe listar jogos do disco? O servidor local (Express) sabe; a
+  // função serverless da Vercel não (sem disco) e ainda responde 404 às rotas
+  // de vários segmentos. Vem de /api/health → `library`.
+  var backendLibrary = false;
   var systemsList = [];
   var currentSystem = null;
   var netplayAvailable = false;   // o servidor desta página tem signaling (netplay LAN)?
@@ -777,6 +781,7 @@
       return r.json();
     }).then(function (j) {
       backendOk = true;
+      backendLibrary = !!j.library;
       netplayAvailable = !!j.netplay;
       if (j.lanUrl) serverLanUrl = j.lanUrl;
       if (j.publicUrl) serverPublicUrl = j.publicUrl;
@@ -944,14 +949,17 @@
     renderModeOptions(sys);
     renderCoreOptions(sys);
 
+    // Pasta de jogos e playlist só fazem sentido com um backend de disco.
+    if (el('dir-row')) el('dir-row').style.display = backendLibrary ? '' : 'none';
+    if (el('dir-hint')) el('dir-hint').style.display = backendLibrary ? '' : 'none';
     el('dir-input').value = sys.dir || '';
     el('dir-view').textContent = sys.dir || '—';
     el('games-count').textContent = '—';
     el('games-list').innerHTML = '<div class="empty">Carregando…</div>';
     setM3uMode(false);
-    // O botão de .m3u só aparece em consoles que aceitam a extensão.
+    // O botão de .m3u só aparece em consoles que aceitam a extensão (e com disco).
     if (el('btn-make-m3u')) {
-      el('btn-make-m3u').style.display = (sys.extensions || []).indexOf('.m3u') >= 0 ? '' : 'none';
+      el('btn-make-m3u').style.display = (backendLibrary && (sys.extensions || []).indexOf('.m3u') >= 0) ? '' : 'none';
     }
 
     updateModeDependent(sys);
@@ -1141,6 +1149,14 @@
 
   function loadGames(sys) {
     var box = el('games-list');
+    // Sem biblioteca de disco (site publicado) não há pasta do servidor e a
+    // Vercel responde 404 às rotas de vários segmentos. Em vez de disparar um
+    // request que falha, mostramos o aviso e contamos só os links salvos.
+    if (!backendLibrary) {
+      box.innerHTML = '<div class="empty">A pasta de jogos do servidor só existe no <strong>backend do PC</strong>. No site publicado, jogue por <strong>link</strong> (abaixo) ou pelo <strong>arquivo do seu aparelho</strong> — ou abra a página pelo próprio servidor (ou por um <code>?server=</code> em HTTPS).</div>';
+      filterGames();
+      return;
+    }
     var count = el('games-count');
     count.textContent = 'Carregando…';
     api('/api/systems/' + encodeURIComponent(sys.id) + '/games').then(function (r) {
@@ -1262,6 +1278,8 @@
 
   function refreshGames() {
     if (!currentSystem) return;
+    // Sem disco não há o que reindexar; só redesenha a lista (links salvos).
+    if (!backendLibrary) { loadGames(currentSystem); return; }
     api('/api/systems/' + encodeURIComponent(currentSystem.id) + '/rescan', { method: 'POST' })
       .catch(function () {})
       .then(function () { loadGames(currentSystem); });
@@ -1686,6 +1704,18 @@
     if (!file) return;
     var region = el('bios-region').value;
     var target = BIOS_NAME_BY_REGION[region] || 'scph5501.bin';
+    // Site publicado (sem disco): guarda a BIOS no próprio aparelho (IndexedDB),
+    // o mesmo caminho do arquivo local do jogo — o `/api/bios/upload` não chega
+    // à função da Vercel. Com backend, sobe ao servidor (fica para todos).
+    if (!backendLibrary) {
+      var key = 'bios:' + Date.now();
+      idbPut(key, file).then(function () {
+        writeJSON(LS.bios, { source: 'idb', key: key, name: target, region: region });
+        refreshBiosUI();
+        toast('BIOS salva neste aparelho.', 'ok');
+      }).catch(function (e) { toast('Erro na BIOS: ' + escapeHtml(e && e.message ? e.message : e), 'err'); });
+      return;
+    }
     file.arrayBuffer().then(function (buf) {
       return api('/api/bios/upload?name=' + encodeURIComponent(target), {
         method: 'POST', headers: { 'Content-Type': 'application/octet-stream' }, body: buf
@@ -1924,12 +1954,12 @@
   };
 
   // Servidores ICE (STUN/TURN) para o WebRTC atravessar a NAT. Vêm do backend
-  // (/api/netplay/ice) — assim dá para apontar um TURN próprio pela internet.
+  // (/api/ice) — assim dá para apontar um TURN próprio pela internet.
   var iceLoaded = false;
   function loadIceServers() {
     if (iceLoaded || !netplayAvailable) return;
     iceLoaded = true;
-    api('/api/netplay/ice').then(function (r) { return r.ok ? r.json() : null; })
+    api('/api/ice').then(function (r) { return r.ok ? r.json() : null; })
       .then(function (j) {
         if (j && Array.isArray(j.iceServers) && j.iceServers.length) NP.iceServers = j.iceServers;
       })

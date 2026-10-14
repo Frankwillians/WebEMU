@@ -305,7 +305,7 @@ convidado entra sozinho no modo certo — inclusive abrindo o link pelo site do
 Vercel. Há ainda o botão **🔌 Testar conexão** para confirmar o sinalizador.
 
 > O WebRTC continua **ponto a ponto** (vídeo/áudio/inputs), usando os servidores
-> STUN/TURN gratuitos entregues em `GET /api/netplay/ice`. O sinalizador só faz a
+> STUN/TURN gratuitos entregues em `GET /api/ice`. O sinalizador só faz a
 > apresentação inicial entre os jogadores.
 
 #### Salas privadas
@@ -377,7 +377,8 @@ $env:TURN_URLS="turn:seu.turn:3478,turns:seu.turn:5349"
 $env:TURN_USERNAME="usuario"; $env:TURN_CREDENTIAL="senha"; npm start
 ```
 
-O servidor entrega esses dados ao navegador em `GET /api/netplay/ice`.
+O servidor entrega esses dados ao navegador em `GET /api/ice` (rota de um só
+segmento, para funcionar também na função da Vercel).
 
 ### Escolher a pasta de jogos
 
@@ -434,15 +435,16 @@ core lê a lista (o `.m3u` referencia os discos por caminho relativo).
 
 | Método | Rota                                 | Descrição                                            |
 |--------|--------------------------------------|------------------------------------------------------|
+| GET    | `/api/health`                        | Estado do servidor: `netplay`, `lanUrl`, `library` (se há biblioteca de disco) |
 | GET    | `/api/systems`                       | Lista os consoles, contagem de jogos, modos e BIOS   |
-| GET    | `/api/systems/:id/games`             | Lista os jogos do console (indexado do disco)        |
+| GET    | `/api/systems/:id/games`             | Lista os jogos do console (indexado do disco) — só com `library:true` |
 | POST   | `/api/systems/:id/rescan`            | Reindexa a pasta do console                          |
 | POST   | `/api/systems/:id/m3u`               | **Cria playlist `.m3u`** (multi-disco) a partir de `gameIds` |
 | GET    | `/api/cover?system=<id>&name=<nome>` | **Capa do jogo** — busca no libretro-thumbnails (exata e, se preciso, aproximada no console), com cache. Serve o servidor local **e** a Vercel |
 | GET    | `/api/cover?system=<id>&url=<img>`   | **Capa manual** — proxy da imagem apontada (mesma guarda anti-SSRF do proxy de ROM) |
 | GET    | `/roms/:systemId/...`                | Arquivos do console (com Range)                      |
 | POST   | `/api/systems/:id/launch`            | Abre o jogo no RetroArch do PC (modo “PC servidor”)  |
-| GET    | `/api/netplay/ice`                   | Servidores ICE (STUN/TURN) que o netplay usa (STUN + TURN público por padrão) |
+| GET    | `/api/ice`                           | Servidores ICE (STUN/TURN) do netplay (STUN + TURN público por padrão) — um segmento, funciona na Vercel |
 | WS     | `/signaling`                         | Sinalizador + lobby das salas — **servidor local** (modo LAN)                |
 | WS     | `/api/ws`                            | Sinalizador + lobby das salas — **Vercel** (modo online, `api/ws.js`)        |
 
@@ -452,6 +454,13 @@ core lê a lista (o `.m3u` referencia os discos por caminho relativo).
 > **aproximada** dentro daquele console (índice do `thumbnails.libretro.com`,
 > cacheado em memória), respeitando a região do nome quando ele já traz uma. Uma
 > capa apontada manualmente (`?url=`) passa pelo mesmo proxy.
+>
+> **Biblioteca de disco:** `/api/health` informa `library`. No servidor local
+> (`npm start`) é `true` e a pasta do servidor é listada normalmente. No site
+> publicado da Vercel a função serverless não tem disco (`library:false`) e a
+> Vercel responde 404 às rotas de vários segmentos — por isso o jogador lista
+> pelos **links salvos** ou pelo **arquivo do aparelho**, ou aponta o backend do
+> PC com `?server=` (HTTPS).
 
 ---
 
@@ -624,7 +633,7 @@ engrenagem). Gamepads USB/Bluetooth funcionam automaticamente (Gamepad API).
 ### 🔜 Fase 3 — Netplay avançado
 - [ ] Rollback real (save/restore de estados por frame)
 - [ ] Sincronização de save states comprimida
-- [x] TURN/STUN configuráveis (`/api/netplay/ice` + variáveis `TURN_*`)
+- [x] TURN/STUN configuráveis (`/api/ice` + variáveis `TURN_*`)
 - [x] Lobby com lista de salas
 - [ ] Estado das salas em Redis/Marketplace (remover a limitação de instância da Vercel)
 

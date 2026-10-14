@@ -282,12 +282,12 @@ app.use((req, res, next) => {
 });
 
 // Token de acesso (opcional): protege a API quando ACCESS_TOKEN está definido.
-// Ficam abertos apenas /api/health e /api/netplay/ice (para a página se identificar).
+// Ficam abertos apenas /api/health e /api/ice (para a página se identificar).
 app.use((req, res, next) => {
   if (!ACCESS_TOKEN) return next();
   const p = req.path || '';
   if (!p.startsWith('/api/')) return next();
-  if (p === '/api/health' || p === '/api/netplay/ice') return next();
+  if (p === '/api/health' || p === '/api/ice') return next();
 
   const fromQuery = (req.query && req.query.token) || '';
   const fromHeader = req.get('x-webemu-token') || '';
@@ -325,6 +325,10 @@ app.get('/api/health', (req, res) => {
     gamesIndexed: summary.reduce((sum, s) => sum + s.count, 0),
     systems: summary,
     netplay: netplayWsEnabled,
+    // A função serverless da Vercel não tem disco: não há biblioteca de ROMs a
+    // listar. O site publicado usa `false` e o frontend nem tenta as rotas de
+    // vários segmentos (`/api/systems/:id/games`), que a Vercel responde 404.
+    library: !process.env.VERCEL,
     ws: wsUrl,
     publicUrl: PUBLIC_URL || null,
     lanIP,
@@ -334,7 +338,10 @@ app.get('/api/health', (req, res) => {
 });
 
 // Servidores ICE (STUN/TURN) que o netplay usa para atravessar a NAT.
-app.get('/api/netplay/ice', (req, res) => {
+// Rota de UM segmento de propósito: no site publicado a Vercel só entrega um
+// segmento à função, então `/api/netplay/ice` nunca chegava (404). Com `/api/ice`
+// o mesmo handler serve o backend local e a função serverless.
+app.get('/api/ice', (req, res) => {
   res.json({ iceServers: iceServers() });
 });
 
@@ -354,7 +361,7 @@ const VERSION = (() => {
 const PUBLIC_URL = String(process.env.PUBLIC_URL || '').replace(/\/+$/, '');
 
 // Token de acesso opcional. Quando definido, protege a API (exceto /api/health
-// e /api/netplay/ice) e o WebSocket de sinalização — recomendado ao expor o
+// e /api/ice) e o WebSocket de sinalização — recomendado ao expor o
 // servidor na internet por um túnel. Ex.: ACCESS_TOKEN="minha-senha"
 const ACCESS_TOKEN = String(process.env.ACCESS_TOKEN || '');
 

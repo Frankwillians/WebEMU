@@ -227,7 +227,8 @@ Mídia e inputs:    WebRTC (P2P) — o HOST emula e transmite; convidados só ma
 - Convidado **não precisa da ROM**.
 - **Inputs** chegam ao host e são aplicados via
   `gameManager.functions.simulateInput(player, retroArchIndex, value)`.
-- ICE/STUN/TURN vêm de `GET /api/netplay/ice`.
+- ICE/STUN/TURN vêm de `GET /api/ice` (rota de **um** segmento, para funcionar
+  também na função da Vercel — multi-segmento não chega lá).
 
 ### 6.3 Deploy (Vercel)
 
@@ -235,13 +236,16 @@ Mídia e inputs:    WebRTC (P2P) — o HOST emula e transmite; convidados só ma
 - `api/[...all].js` expõe o backend Express em `/api/*` (com *smart-join* do
   `req.query['...all']`, caso a Vercel entregue o resto do caminho como query).
 - **Atenção (verificado em produção):** no site publicado só chegam à função as
-  rotas de **um segmento** (`/api/systems`, `/api/health`, `/api/config`…); as de
-  vários segmentos (`/api/systems/:id/games`, `/api/netplay/ice`) voltam
-  `NOT_FOUND` **da própria Vercel**. Por isso todo recurso que o site precisa
-  tem função própria de um segmento — a capa é `api/cover.js` (`/api/cover`),
-  que resolve o nome sozinho, sem depender do PC dos jogos.
-- A biblioteca do disco continua vindo do backend configurado
-  (`getApiBase()`/`?server=`), não da função da Vercel.
+  rotas de **um segmento** (`/api/systems`, `/api/health`, `/api/config`, `/api/ice`…);
+  as de vários segmentos (`/api/systems/:id/games`, `/api/rom?…` é um segmento, mas
+  `/api/bios/upload`) voltam `NOT_FOUND` **da própria Vercel**. Por isso todo
+  recurso que o site precisa tem função/rota de um segmento — a capa é
+  `api/cover.js` (`/api/cover`) e o ICE é `/api/ice` (mesmo handler do Express).
+- **Como o front evita o 404:** `/api/health` devolve `library` (`true` no Express
+  local, `false` na Vercel). Com `library:false` o front **não chama** as rotas de
+  disco (`/api/systems/:id/games`, `rescan`, `m3u`, `bios/upload`): mostra um
+  aviso e conta só os links salvos. A biblioteca do disco continua vindo do
+  backend configurado (`getApiBase()`/`?server=`), não da função da Vercel.
 - `vercel.json` aplica **COOP/COEP** em `/` e `/play.html` (necessário para
   `SharedArrayBuffer` e o modo threads do PSP) e CORS/CORP em `/api/rom`,
   `/roms/*`, `/api/systems/*`.
@@ -258,7 +262,7 @@ Mídia e inputs:    WebRTC (P2P) — o HOST emula e transmite; convidados só ma
 
 | Método | Rota | Descrição |
 |--------|------|-----------|
-| GET | `/api/health` | Status + `lanIP`/`lanUrl` + `netplay`/`ws` |
+| GET | `/api/health` | Status + `lanIP`/`lanUrl` + `netplay`/`ws` + `library` (tem disco?) |
 | GET | `/api/systems` | Consoles, contagem, modos e BIOS |
 | GET | `/api/systems/:id/games` | Jogos do console (indexado do disco) |
 | POST | `/api/systems/:id/rescan` | Reindexa a pasta do console |
@@ -268,7 +272,7 @@ Mídia e inputs:    WebRTC (P2P) — o HOST emula e transmite; convidados só ma
 | POST | `/api/systems/:id/launch` | Abre no RetroArch do PC |
 | GET | `/roms/:systemId/*` | Arquivos do console (Range) |
 | GET | `/api/rom?url=` | Proxy de ROM por URL (CORS + Range) |
-| GET | `/api/netplay/ice` | Servidores ICE (STUN/TURN) |
+| GET | `/api/ice` | Servidores ICE (STUN/TURN) — um segmento (Vercel) |
 | GET | `/api/bios` · POST/DELETE `/api/bios` | Gestão de BIOS |
 | GET/POST | `/api/config` | Lê/grava pastas (grava em `ps1emu.config.json`) |
 | GET | `/api/ps2/games` · POST `/api/ps2/rescan` | Biblioteca de PS2 |
@@ -380,6 +384,10 @@ Mensagens do sinalizador (`src/backend/signaling.js`): `join`, `leave`, `offer`,
     Navegador **público→privado** (Vercel→LAN) também exige responder o
     preflight **Private Network Access** com `Access-Control-Allow-Private-Network:
     true` (feito no `server.js`); isso **não** contorna Mixed Content.
+    No site publicado (`library:false`, ver §6.3) o front **nem tenta** a
+    biblioteca de disco (`/api/systems/:id/games`…): evita o 404 da Vercel. O
+    **ICE** é `/api/ice` (um segmento) justamente para o TURN chegar ao navegador
+    também na Vercel.
 10b. **Base da API (`ps1emu.apiBase`) é STRING crua.** `setApiBase` grava string
     e `getApiBase` lê string (com `normalizarBase` para aceitar `IP:porta`).
     **Nunca** leia essa chave com `readJSON`/`JSON.parse`: era exatamente o bug
@@ -503,7 +511,8 @@ resultado **verificável** (teste/validação) antes de considerar pronto.
 |---------|-----------------------------|
 | Tela preta em jogos comerciais | Core próprio (TS) não boota; use EmulatorJS. Ver §1 |
 | PSP/DOS não iniciam no celular | Falta contexto seguro + COOP/COEP (`npm run cert`, HTTPS) |
-| 404 na Vercel em rotas multi-segmento | No site publicado a função só recebe um segmento; use uma função própria (`api/cover.js`) para o que o site precisa (ver §6.3) |
+| 404 em `/api/systems/:id/games` ao abrir um console no site publicado | A função da Vercel só recebe um segmento; o front agora usa `health.library` e **não chama** rotas de disco quando `false` (mostra aviso + links). Para a biblioteca do PC, abra pelo backend (`?server=`, ver §6.3) |
+| Netplay sem TURN no site publicado | O ICE era `/api/netplay/ice` (multi-segmento) → 404. Agora é `/api/ice` (um segmento), servido pelo Express e pela função |
 | Capa bloqueada no site publicado | Não deveria: a capa é pedida à própria origem (`/api/cover`) e resolvida só por nome + console |
 | ROM por link bloqueada no Vercel | Mixed Content: use `/api/rom` (`precisaProxy()`) |
 | Conectar do site HTTPS ao PC da LAN | **Mixed Content** (bloqueio do navegador, não é header). Abra `http://IP:3000/play.html`, use o **HTTPS** do PC (`npm run cert` → `https://IP:3443`, com `?server=`) ou um túnel HTTPS. O preflight **PNA** já é respondido |
