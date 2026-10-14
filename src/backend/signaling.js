@@ -209,10 +209,12 @@ export function attachSignaling(wss) {
 
   wss.on('connection', (ws, req) => {
     const peerId = `peer_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+    // IP do cliente (pode vir atrás de proxy/ngrok — pega x-forwarded-for se houver)
+    const clientIp = (req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').split(',')[0].trim();
     let currentPeer = null;
     let currentRoomId = null;
 
-    console.log(`[SIGNALING] Conexão: ${peerId} de ${req.socket.remoteAddress}`);
+    console.log(`[SIGNALING] Conexão: ${peerId} de ${clientIp}`);
 
     ws.on('message', (data) => {
       let message;
@@ -322,6 +324,55 @@ export function attachSignaling(wss) {
         return;
       }
 
+      // Reconexão por token de sessão (mesmo navegador = mesmo jogador)
+      const sessionToken = payload.sessionToken ? String(payload.sessionToken).trim() : '';
+      if (sessionToken) {
+        for (const [existingPeerId, existingPeer] of room.peers) {
+          if (existingPeer.sessionToken === sessionToken) {
+            // Mesmo jogador reconectando — atualiza o WebSocket e mantém o playerIndex
+            console.log(`[SIGNALING] Reconexão: ${existingPeerId} (player ${existingPeer.playerIndex + 1}) token=${sessionToken}`);
+            existingPeer.ws = ws;
+            existingPeer.ip = clientIp; // atualiza IP se mudou
+            currentPeer = existingPeer;
+            currentRoomId = roomId;
+            // Responde com peer-list atualizada (mesmo formato do join normal)
+            const peers = peersExcept(room, existingPeerId);
+            send(ws, {
+              type: MessageType.PEER_LIST,
+              payload: {
+                peers,
+                yourId: existingPeerId,
+                yourPlayerIndex: existingPeer.playerIndex,
+                metadata: metaPublic(room),
+                room: roomSummary(room),
+                resumed: true // flag para o frontend saber que é retomada
+              }
+            });
+            // Avisa os outros da sala que este jogador voltou
+            broadcastRoom(room, {
+              type: MessageType.PEER_JOINED,
+              payload: {
+                id: existingPeerId,
+                playerIndex: existingPeer.playerIndex,
+                name: existingPeer.metadata.name
+              }
+            }, existingPeerId);
+            return;
+          }
+        }
+      }
+
+      // Impede duas conexões do mesmo IP na mesma sala (evita "clone" do host)
+      // Só aplica se NÃO for reconexão por token (tokens diferentes = pessoas diferentes)
+      if (!sessionToken) {
+        for (const [, existingPeer] of room.peers) {
+          if (existingPeer.ip === clientIp && existingPeer.id !== peerId) {
+            sendError(ws, 'Já existe um jogador com este IP na sala');
+            return;
+          }
+        }
+      }
+
       // Sai de uma sala anterior, se houver
       leaveRoom();
 
@@ -344,6 +395,8 @@ export function attachSignaling(wss) {
         roomId,
         playerIndex,
         ready: false,
+        ip: clientIp,
+        sessionToken, // token para reconexão do mesmo navegador
         metadata: { name: metadata.name || `Jogador ${playerIndex + 1}`, ...metadata },
         joinedAt: now()
       };

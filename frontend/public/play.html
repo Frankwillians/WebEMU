@@ -1753,6 +1753,15 @@
     audioDest: null,
     pendingJoin: null,
     pendingWs: null,   // conexão WebSocket em andamento (evita abrir duas)
+    // Token de sessão (persistido): identifica este navegador/jogador.
+    // Se a pessoa clicar 2x no link de convite, reusa o mesmo token → retoma a sessão.
+    sessionToken: (function () {
+      try {
+        var t = localStorage.getItem('np_session_token');
+        if (!t) { t = 'st_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 10); localStorage.setItem('np_session_token', t); }
+        return t;
+      } catch (e) { return 'st_' + Date.now().toString(36); }
+    })(),
     // --- Sinalizador: dois modos ---
     // 'lan'    → /signaling no servidor desta página (PC local / outro PC da rede)
     // 'online' → endpoint WebSocket da Vercel (/api/ws), alcançável pela internet
@@ -1831,9 +1840,9 @@
         .then(function () {
           npReconnectDelay = 1000;
           if (eraHost) {
-            npSend({ type: 'join', payload: { roomId: sala, playerIndex: 0, password: '', metadata: meta || {} } });
+            npSend({ type: 'join', payload: { roomId: sala, playerIndex: 0, password: '', metadata: meta || {}, sessionToken: NP.sessionToken } });
           } else {
-            npSend({ type: 'join', payload: { roomId: sala, playerIndex: idx || 1, password: '', metadata: { name: npPlayerName() } } });
+            npSend({ type: 'join', payload: { roomId: sala, playerIndex: idx || 1, password: '', metadata: { name: npPlayerName() }, sessionToken: NP.sessionToken } });
           }
         })
         .catch(function () { npScheduleReconnect('sinalizador indisponível'); });
@@ -2001,17 +2010,28 @@
     var list = (p.peers || []).map(function (x) {
       return { id: x.id, playerIndex: x.playerIndex, name: x.name || x.metadata && x.metadata.name };
     });
-    list.push({ id: p.yourId, playerIndex: NP.myPlayerIndex, name: NP.isHost ? (NP.meta && NP.meta.host) || NP.name : NP.name });
+    list.push({ id: p.yourId, playerIndex: p.yourPlayerIndex, name: NP.isHost ? (NP.meta && NP.meta.host) || NP.name : NP.name });
     NP.players = list.sort(function (a, b) { return a.playerIndex - b.playerIndex; });
+    NP.myPlayerIndex = p.yourPlayerIndex;
+    NP.isHost = NP.myPlayerIndex === 0;
+    if (p.metadata) NP.meta = p.metadata;
+    if (p.room) NP.summary = p.room;
+    NP.roomId = (p.room && p.room.roomId) || NP.roomId;
     NP.pendingJoin = null;
     npRenderRoom();
-    if (!NP.isHost) npShowGuest();
-    if (NP.isHost && !eraHost) {
-      npAppendChat('', '👑 Você agora é o host da sala ' + NP.roomId + '.', false, true);
-      toast('👑 Você agora é o <b>host</b> da sala. Escolha um jogo para transmitir.', 'info', 9000);
-      npHostRecheckStream();
+    // Se é retomada (mesmo navegador reconectou), NÃO recria a view de guest nem
+    // reseta WebRTC — apenas atualiza a lista de jogadores.
+    if (!p.resumed) {
+      if (!NP.isHost) npShowGuest();
+      if (NP.isHost && !eraHost) {
+        npAppendChat('', '👑 Você agora é o host da sala ' + NP.roomId + '.', false, true);
+        toast('👑 Você agora é o <b>host</b> da sala. Escolha um jogo para transmitir.', 'info', 9000);
+        npHostRecheckStream();
+      }
+      npAppendChat('', 'Você entrou na sala ' + NP.roomId + '.', false, true);
+    } else {
+      npAppendChat('', '🔄 Reconectado à sala ' + NP.roomId + '.', false, true);
     }
-    npAppendChat('', 'Você entrou na sala ' + NP.roomId + '.', false, true);
   }
 
   function npOnPeerJoined(p) {
@@ -2138,7 +2158,7 @@
     NP.roomId = roomId;
     npSetStatus('Entrando em ' + roomId + '…');
     npConnect().then(function () {
-      npSend({ type: 'join', payload: { roomId: roomId, password: password || '', metadata: { name: npPlayerName() } } });
+      npSend({ type: 'join', payload: { roomId: roomId, password: password || '', metadata: { name: npPlayerName() }, sessionToken: NP.sessionToken } });
     }).catch(function (e) {
       NP.pendingJoin = null; NP.roomId = null;
       npSetStatus('Sem conexão');
