@@ -2461,8 +2461,22 @@
   }
 
   // Vibração curta ao apertar (deixa a sensação de botão físico).
+  // Também vibra o controle físico (Gamepad API) se disponível.
   function npVibrar(ms) {
     try { if (navigator.vibrate) navigator.vibrate(ms || 12); } catch (e) {}
+    try {
+      var gps = navigator.getGamepads ? navigator.getGamepads() : [];
+      for (var i = 0; i < gps.length; i++) {
+        var gp = gps[i];
+        if (gp && gp.vibrationActuator) {
+          gp.vibrationActuator.playEffect('dual-rumble', {
+            duration: ms || 50,
+            strongMagnitude: 0.3,
+            weakMagnitude: 0.5
+          }).catch(function () {});
+        }
+      }
+    } catch (e) {}
   }
 
   function npPadButton(label, index, cls) {
@@ -2803,8 +2817,15 @@
   // Captura a tela do emulador para transmitir.
   // force=true → joga fora a captura antiga e faz uma nova (usada quando o host
   // troca de jogo: o canvas antigo já está morto e a trilha velha não serve mais).
+  // Também força se a track de vídeo atual estiver "ended" (canvas foi destruído).
   function npHostStartStream(force) {
-    if (NP.localStream && !force) return Promise.resolve(NP.localStream);
+    if (NP.localStream && !force) {
+      // Verifica se a track de vídeo ainda está viva
+      var vt = NP.localStream.getVideoTracks()[0];
+      if (vt && vt.readyState !== 'ended') return Promise.resolve(NP.localStream);
+      // Track acabou (canvas trocou) → trata como force
+      force = true;
+    }
     if (NP.localStream) {
       NP.localStream.getTracks().forEach(function (t) { try { t.stop(); } catch (e) {} });
       NP.localStream = null;
@@ -2824,6 +2845,7 @@
     var audio = npCaptureAudio();
     if (audio) audio.getAudioTracks().forEach(function (t) { stream.addTrack(t); });
     NP.localStream = stream;
+    NP.streamVersion = (NP.streamVersion || 0) + 1; // versão para o guest saber que é stream novo
     return Promise.resolve(stream);
   }
 
@@ -2845,6 +2867,7 @@
     function avancar() {
       if (!NP.roomId || !NP.isHost) return;
       npHostStartStream(true).then(function () {
+        // Recria TODAS as peer connections (stream novo = tracks novas = PCs novos)
         var ids = Object.keys(NP.peers);
         if (!ids.length) return;
         ids.forEach(function (id) {
@@ -2865,6 +2888,7 @@
     entry.pc = pc;
     entry.iceQueue = entry.iceQueue || [];
     entry.connected = false;
+    entry.streamVersion = NP.streamVersion || 0; // marca qual versão do stream este PC usa
 
     pc.onicecandidate = function (e) {
       if (e.candidate) npSend({ type: 'ice-candidate', targetId: peerId, payload: { candidate: e.candidate } });
@@ -2897,8 +2921,11 @@
       entry.dc = dc;
       dc.onopen = function () { entry.connected = true; npRenderRoom(); };
       dc.onmessage = npOnInput;
-      var stream = NP.localStream || new MediaStream();
-      stream.getTracks().forEach(function (t) { try { pc.addTrack(t, stream); } catch (e) {} });
+      // Adiciona as tracks do stream ATUAL (já validado em npHostStartStream)
+      var stream = NP.localStream;
+      if (stream) {
+        stream.getTracks().forEach(function (t) { try { pc.addTrack(t, stream); } catch (e) {} });
+      }
     } else {
       pc.ondatachannel = function (e) { entry.dc = e.channel; };
       pc.ontrack = function (e) { npGuestOnTrack(e); };
@@ -2956,13 +2983,33 @@
   }
 
   function npGuestOnTrack(e) {
-    if (!NP.remoteStream) NP.remoteStream = new MediaStream();
-    NP.remoteStream.addTrack(e.track);
-    var v = el('np-video');
-    if (v) {
-      if (v.srcObject !== NP.remoteStream) v.srcObject = NP.remoteStream;
-      var pr = v.play();
-      if (pr && pr.catch) pr.catch(function () {});
+    var track = e.track;
+    if (track.kind === 'video') {
+      // Stream novo do host (troca de jogo) → substitui o vídeo completamente
+      // em vez de acumular tracks (o <video> só toca a primeira track de vídeo).
+      var v = el('np-video');
+      var newStream = new MediaStream();
+      newStream.addTrack(track);
+      // Copia tracks de áudio do stream antigo se houver
+      if (NP.remoteStream) {
+        NP.remoteStream.getAudioTracks().forEach(function (at) { newStream.addTrack(at); });
+      }
+      NP.remoteStream = newStream;
+      if (v) {
+        v.srcObject = NP.remoteStream;
+        var pr = v.play();
+        if (pr && pr.catch) pr.catch(function () {});
+      }
+    } else if (track.kind === 'audio') {
+      // Áudio: adiciona ao stream existente (pode haver múltiplos, mas geralmente só 1)
+      if (!NP.remoteStream) NP.remoteStream = new MediaStream();
+      // Remove áudio antigo se houver (evita duplicar)
+      NP.remoteStream.getAudioTracks().forEach(function (at) {
+        try { NP.remoteStream.removeTrack(at); } catch (e) {}
+      });
+      NP.remoteStream.addTrack(track);
+      var v = el('np-video');
+      if (v && v.srcObject !== NP.remoteStream) v.srcObject = NP.remoteStream;
     }
     var msg = el('np-stage-msg');
     if (msg) msg.style.display = 'none';
