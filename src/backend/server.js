@@ -325,6 +325,24 @@ app.get('/api/netplay/ice', (req, res) => {
   res.json({ iceServers: iceServers() });
 });
 
+// Diagnóstico: mostra EXATAMENTE o caminho/parâmetros que chegaram ao Express
+// e o que a última requisição (mesmo que 404) entregou ao adaptador serverless.
+// Usado para depurar o roteamento da Vercel.
+app.get('/api/debug', (req, res) => {
+  res.json({
+    reqUrl: req.url,
+    originalUrl: req.originalUrl,
+    params: req.params,
+    query: req.query,
+    lastReqSeen: globalThis.__webemuLastReq || null,
+    vercel: {
+      VERCEL_URL: process.env.VERCEL_URL || null,
+      VERCEL_ENV: process.env.VERCEL_ENV || null,
+      isVercel: !!process.env.VERCEL
+    }
+  });
+});
+
 // ==================== DESCOBERTA DE SERVIDORES NA REDE ====================
 //
 // Varre as sub-redes locais (/24) procurando outras instâncias do WebEMU

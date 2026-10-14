@@ -17,6 +17,14 @@ import app from '../src/backend/server.js';
 
 export default function handler(req, res) {
   try {
+    globalThis.__webemuLastReq = {
+      url: req.url,
+      queryAll: req.query && req.query.all,
+      at: new Date().toISOString()
+    };
+  } catch { /* ignora */ }
+
+  try {
     const all = req.query && req.query.all;
     if (Array.isArray(all) && all.length) {
       const rest = all.map((s) => decodeURIComponent(String(s))).join('/');
