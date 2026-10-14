@@ -62,15 +62,10 @@ import {
   getSystem,
   defaultDirFor,
   detectRetroArch,
-  findRetroCore,
-  boxartRepos
+  findRetroCore
 } from './systems.js';
-import {
-  resolveCoverUrl,
-  getCachedCoverUrl,
-  setCachedCoverUrl,
-  hasCachedCoverUrl
-} from './covers.js';
+import { sendCover } from './covers.js';
+import { isBlockedProxyHost } from './proxy.js';
 import { Readable } from 'stream';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -766,87 +761,16 @@ app.post('/api/systems/:id/launch', async (req, res) => {
 
 // ==================== CAPAS DOS JOGOS (box art) ====================
 // O nome do jogo vira a imagem no libretro-thumbnails (casamento exato e, se
-// preciso, aproximado dentro do console) em `covers.js`. Aqui só fazemos o
-// proxy da imagem — para o navegador, inclusive quando o aparelho não acessa o
-// GitHub e quando a capa foi apontada por uma URL manual.
-
-/** Envia uma imagem de capa já buscada, com cache e cabeçalhos amigáveis ao COEP. */
-function streamCover(img, res) {
-  res.setHeader('Cache-Control', 'public, max-age=1209600'); // 14 dias
-  res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Content-Type', img.headers.get('content-type') || 'image/png');
-  const len = img.headers.get('content-length');
-  if (len) res.setHeader('Content-Length', len);
-  Readable.fromWeb(img.body).pipe(res);
-}
-
-/** Busca uma imagem apontada manualmente, reusando a guarda de SSRF do proxy. */
-async function fetchManualCover(raw) {
-  let url;
-  try { url = new URL(raw); } catch { return null; }
-  if (url.protocol !== 'http:' && url.protocol !== 'https:') return null;
-  if (isBlockedProxyHost(url.hostname)) return null;
-  try {
-    const r = await fetch(url.href, { headers: { 'User-Agent': 'ps1emu/1.0' } });
-    return r.ok ? r : null;
-  } catch {
-    return null;
-  }
-}
-
-// Capa de um jogo. Por nome (busca exata/aproximada) ou por URL manual:
-//   /api/systems/snes/cover?name=Super%20Mario%20World
-//   /api/systems/snes/cover?url=https://exemplo/capa.png
-app.get('/api/systems/:id/cover', async (req, res) => {
-  const system = getSystem(req.params.id);
-  if (!system) return res.status(404).end();
-
-  const manual = String(req.query.url || '').trim();
-  if (manual) {
-    const img = await fetchManualCover(manual);
-    if (!img || !img.body) return res.status(404).end();
-    return streamCover(img, res);
-  }
-
-  const repos = boxartRepos(system.id);
-  if (!repos.length) return res.status(404).end();
-
-  const name = String(req.query.name || '').trim();
-  if (!name) return res.status(400).end();
-
-  let url;
-  if (hasCachedCoverUrl(system.id, name)) {
-    url = getCachedCoverUrl(system.id, name);
-  } else {
-    url = await resolveCoverUrl(repos, name);
-    setCachedCoverUrl(system.id, name, url);
-  }
-  if (!url) return res.status(404).end();
-
-  try {
-    const img = await fetch(url);
-    if (!img.ok || !img.body) return res.status(502).end();
-    streamCover(img, res);
-  } catch (error) {
-    console.error('[COVER] Erro ao buscar capa:', error.message);
-    if (!res.headersSent) res.status(502).end();
-  }
-});
+// preciso, aproximado dentro do console) — tudo em `covers.js`, compartilhado
+// com a função serverless da Vercel. A capa depende só de nome + console
+// (catálogo externo), então não precisa do PC que tem os jogos:
+//   GET /api/cover?system=snes&name=Super%20Mario%20World
+//   GET /api/cover?system=snes&url=https://exemplo/capa.png   (capa manual)
+app.get('/api/cover', sendCover);
 
 // ==================== PROXY DE ROM (jogar por link) ====================
 // Baixa um arquivo remoto e entrega à página, contornando bloqueios de CORS.
 // Suporta Range (retomada/seek). Bloqueia loopback/link-local (SSRF).
-function isBlockedProxyHost(host) {
-  if (!host) return true;
-  const h = String(host).replace(/^\[|\]$/g, '').toLowerCase();
-  if (h === 'localhost' || h === '::1' || h === '0.0.0.0') return true;
-  if (/^127\./.test(h)) return true;
-  if (/^169\.254\./.test(h)) return true; // inclui 169.254.169.254 (metadata)
-  if (/^::ffff:127\./.test(h)) return true;
-  return false;
-}
-
 app.get('/api/rom', async (req, res) => {
   const target = String(req.query.url || '').trim();
   if (!target) return res.status(400).json({ error: 'Parâmetro url ausente' });

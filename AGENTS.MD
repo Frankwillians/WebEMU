@@ -109,7 +109,8 @@ ps1emu/
 │   ├── server.js          HTTP + API REST + estáticos + wiring do signaling
 │   ├── signaling.js       WebSocket de sinalização + lobby (salas/senha/chat/kick)
 │   ├── systems.js         Catálogo dos 29 consoles (id, nome, cores, extensões)
-│   ├── covers.js          Capas: nome→imagem no libretro-thumbnails (exata/aproximada)
+│   ├── covers.js          Capas: nome→imagem no libretro-thumbnails (exata/aproximada) + rota /api/cover
+│   ├── proxy.js           Guarda de SSRF dos proxies (loopback/link-local)
 │   ├── storage.js         Indexação de ROMs do disco (PS1, PS2, por sistema)
 │   ├── bios.js            Upload/armazenamento de BIOS
 │   ├── settings.js        Config persistente (ps1emu.config.json)
@@ -118,7 +119,7 @@ ps1emu/
 │   ├── [...all].js        Adaptador catch-all que expõe TODO o backend em /api/*
 │   ├── ws.js              Endpoint WebSocket do netplay online
 │   ├── rom.js             Proxy de ROM (Mixed Content: HTTPS→HTTP + Range)
-│   └── cover.js           Proxy de capas (Mixed Content)
+│   └── cover.js           Capa do jogo na Vercel (mesma lógica de covers.js)
 ├── scripts/
 │   ├── vercel-build.mjs   Copia frontend/public → public/ no deploy
 │   └── make-cert.mjs      Gera certs/ (HTTPS local p/ PSP e DOS)
@@ -194,7 +195,6 @@ Do netplay:
 | `PUBLIC_URL` | URL pública (ex.: túnel HTTPS que você subiu) usada nos **links de convite** |
 | `ACCESS_TOKEN` | Token opcional p/ proteger a API e o sinalizador |
 | `NETPLAY_WS=0` | **Desliga** a opção 🌐 Online (Vercel) |
-| `LOCAL_API_BASE` | Base local usada pelo `api/cover.js` (default `http://192.168.1.5:3999`) |
 
 ---
 
@@ -205,7 +205,7 @@ Do netplay:
 ```
 /play.html  ──► GET /api/systems            (lista consoles + contagem)
             ──► GET /api/systems/:id/games  (biblioteca indexada)
-            ──► GET /api/systems/:id/cover  (capa via proxy libretro-thumbnails)
+            ──► GET /api/cover?system=&name= (capa no libretro-thumbnails, exata/aproximada)
             ──► GET /roms/:systemId/<arquivo>            (ROM local, Range)
              ou  GET /api/rom?url=…                      (ROM por URL, proxy CORS)
             ──► EmulatorJS carrega o core WASM no navegador
@@ -232,14 +232,19 @@ Mídia e inputs:    WebRTC (P2P) — o HOST emula e transmite; convidados só ma
 ### 6.3 Deploy (Vercel)
 
 - `outputDirectory: public` (cópia de `frontend/public` feita no build).
-- `api/[...all].js` expõe **todo** o backend Express em `/api/*`.
+- `api/[...all].js` expõe o backend Express em `/api/*` (com *smart-join* do
+  `req.query['...all']`, caso a Vercel entregue o resto do caminho como query).
+- **Atenção (verificado em produção):** no site publicado só chegam à função as
+  rotas de **um segmento** (`/api/systems`, `/api/health`, `/api/config`…); as de
+  vários segmentos (`/api/systems/:id/games`, `/api/netplay/ice`) voltam
+  `NOT_FOUND` **da própria Vercel**. Por isso todo recurso que o site precisa
+  tem função própria de um segmento — a capa é `api/cover.js` (`/api/cover`),
+  que resolve o nome sozinho, sem depender do PC dos jogos.
+- A biblioteca do disco continua vindo do backend configurado
+  (`getApiBase()`/`?server=`), não da função da Vercel.
 - `vercel.json` aplica **COOP/COEP** em `/` e `/play.html` (necessário para
   `SharedArrayBuffer` e o modo threads do PSP) e CORS/CORP em `/api/rom`,
   `/roms/*`, `/api/systems/*`.
-- **Mergulho importante:** a Vercel entrega o "resto" do caminho em
-  `req.query['...all']` (com os três pontos!). Sem o *smart-join* do
-  `api/[...all].js`, rotas de vários segmentos (`/api/systems/:id/games`,
-  `/api/netplay/ice`) dão **404**. Não mexa nisso sem entender.
 - O servidor de produção serve **apenas o produto**: `play.html` (rotas `/`,
   `/play`, `/play.html`), `/ps2`, `/recomp`, `/disc`, `/bios`, `/roms` e a API.
   O **React (`frontend/src`) é referência de código e não é servido** (o
@@ -258,8 +263,8 @@ Mídia e inputs:    WebRTC (P2P) — o HOST emula e transmite; convidados só ma
 | GET | `/api/systems/:id/games` | Jogos do console (indexado do disco) |
 | POST | `/api/systems/:id/rescan` | Reindexa a pasta do console |
 | POST | `/api/systems/:id/m3u` | Cria playlist `.m3u` (multi-disco) a partir de `{ name, gameIds }` |
-| GET | `/api/systems/:id/cover?name=` | Capa do jogo (exata + aproximada no console, com cache) |
-| GET | `/api/systems/:id/cover?url=` | Capa manual (proxy da imagem apontada) |
+| GET | `/api/cover?system=&name=` | Capa do jogo (exata + aproximada no console, com cache) |
+| GET | `/api/cover?system=&url=` | Capa manual (proxy da imagem apontada, com guarda anti-SSRF) |
 | POST | `/api/systems/:id/launch` | Abre no RetroArch do PC |
 | GET | `/roms/:systemId/*` | Arquivos do console (Range) |
 | GET | `/api/rom?url=` | Proxy de ROM por URL (CORS + Range) |
@@ -304,11 +309,12 @@ Mídia e inputs:    WebRTC (P2P) — o HOST emula e transmite; convidados só ma
   (`linksCount`/`sysCard`/`games-count`). No mesmo cartão, `exportLinksBackup`
   baixa um JSON com a coleção de **todos os consoles** (incluindo `cover`) e
   `importLinksBackup` restaura (mescla sem duplicar, teto de 100 por console).
-- **Capa dos links:** `linkCard` pede a capa por `coverUrlByName(sys, nome)` — o
-  backend (`covers.js`) tenta o nome exato no libretro-thumbnails e, se não
-  achar, uma busca **aproximada** dentro daquele console; renomear refaz a capa.
-  Se o nome ainda errar, `link.cover` guarda uma **URL manual** (o 🖼), servida
-  pelo mesmo endpoint (`?url=`, via `coverUrlManual`) para funcionar sob COEP.
+- **Capa dos links:** `linkCard` pede a capa por `coverUrlByName(sys, nome)` e
+  `coverUrlManual(sys, url)`, que compartilham `coverEndpoint` — sempre na origem
+  da própria página (`/api/cover?system=&name=|url=`), inclusive no site
+  publicado. O backend (`covers.js`) tenta o nome exato no libretro-thumbnails e,
+  se não achar, uma busca **aproximada** dentro daquele console; renomear refaz a
+  capa. Se o nome ainda errar, `link.cover` guarda uma **URL manual** (o 🖼).
 - Ao mexer em UI, **valide o balanceamento de tags** (ver §11).
 
 ### Estilo geral
@@ -356,9 +362,11 @@ Mensagens do sinalizador (`src/backend/signaling.js`): `join`, `leave`, `offer`,
    `simulateInput(0, idx, val)`; convidado envia pela rede com `player: NP.myPlayerIndex`.
 9. **Dois sinalizadores:** 🏠 LAN (`/signaling`) e 🌐 Online (`/api/ws`). O link de
    convite carrega `?room=`, `?server=` e `?ws=` para o convidado conectar sozinho.
-10. **Mixed Content:** em HTTPS (Vercel), ROMs/capas/BIOS vindos de HTTP local
-    passam por proxy (`/api/rom`, `/api/cover`). Use `precisaProxy()`
+10. **Mixed Content:** em HTTPS (Vercel), ROMs vindas de HTTP local passam por
+    proxy (`/api/rom`). Use `precisaProxy()`
     (`location.protocol === 'https:' && /^http:/i.test(getApiBase())`).
+    A **capa** não cai nisso: ela é sempre pedida à origem da própria página
+    (`/api/cover`), que resolve por nome + console sem tocar no backend local.
     Uma página HTTPS **não** consegue falar direto com API HTTP da LAN
     (`/api/health`, `/api/systems`): o navegador bloqueia. Para
     jogar pelos arquivos do PC, abra o próprio `http://IP:3000/play.html`.
@@ -495,8 +503,9 @@ resultado **verificável** (teste/validação) antes de considerar pronto.
 |---------|-----------------------------|
 | Tela preta em jogos comerciais | Core próprio (TS) não boota; use EmulatorJS. Ver §1 |
 | PSP/DOS não iniciam no celular | Falta contexto seguro + COOP/COEP (`npm run cert`, HTTPS) |
-| 404 na Vercel em rotas multi-segmento | Smart-join de `req.query['...all']` em `api/[...all].js` |
-| Capa/ROM bloqueada no Vercel | Mixed Content: use `/api/cover`, `/api/rom` (`precisaProxy()`) |
+| 404 na Vercel em rotas multi-segmento | No site publicado a função só recebe um segmento; use uma função própria (`api/cover.js`) para o que o site precisa (ver §6.3) |
+| Capa bloqueada no site publicado | Não deveria: a capa é pedida à própria origem (`/api/cover`) e resolvida só por nome + console |
+| ROM por link bloqueada no Vercel | Mixed Content: use `/api/rom` (`precisaProxy()`) |
 | Conectar do site HTTPS ao PC da LAN | **Mixed Content** (bloqueio do navegador, não é header). Abra `http://IP:3000/play.html`, use o **HTTPS** do PC (`npm run cert` → `https://IP:3443`, com `?server=`) ou um túnel HTTPS. O preflight **PNA** já é respondido |
 | Jogar com quem está em **outra rede** | **👥 Jogar em rede** no modo 🌐 Online (netplay); ou um túnel HTTPS que **você** sobe (`cloudflared`/`ngrok`/Tailscale) + `PUBLIC_URL` para levar a biblioteca. O túnel expõe o PC na internet — considere `ACCESS_TOKEN` |
 | "Conectado a https://web-emu.vercel.app" ao digitar um IP | `getApiBase` lendo a base com `JSON.parse` (gravada crua) — aponte com `?server=` (grava string crua); `normalizarBase` |

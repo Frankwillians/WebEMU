@@ -14,7 +14,16 @@
  *
  * O índice é a listagem do host `thumbnails.libretro.com` (o mesmo conteúdo do
  * GitHub, porém navegável) e fica em cache na memória por 24 h.
+ *
+ * `sendCover` é a ponta HTTP: vive aqui para o **mesmo** código atender o
+ * servidor local (`/api/cover`) e a função serverless da Vercel
+ * (`api/cover.js`). A capa depende só de nome + console (catálogo externo),
+ * então não precisa do PC que tem os jogos.
  */
+
+import { Readable } from 'node:stream';
+import { getSystem, boxartRepos } from './systems.js';
+import { isBlockedProxyHost } from './proxy.js';
 
 const COVER_FOLDERS = ['Named_Boxarts', 'Named_Snaps', 'Named_Titles'];
 const COVER_BASE = 'https://raw.githubusercontent.com/libretro-thumbnails';
@@ -196,6 +205,77 @@ export async function resolveCoverUrl(repos, rawName) {
     if (file) return `${COVER_BASE}/${repo}/master/Named_Boxarts/${encodeURIComponent(file)}`;
   }
   return null;
+}
+
+/** Envia uma imagem de capa já buscada, com cache e cabeçalhos amigáveis ao COEP. */
+function streamCover(img, res) {
+  res.setHeader('Cache-Control', 'public, max-age=1209600, immutable'); // 14 dias
+  res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Content-Type', img.headers.get('content-type') || 'image/png');
+  const len = img.headers.get('content-length');
+  if (len) res.setHeader('Content-Length', len);
+  Readable.fromWeb(img.body).pipe(res);
+}
+
+/** Busca (e valida) a imagem de uma URL de capa manual. */
+async function fetchManualCover(raw) {
+  let url;
+  try { url = new URL(String(raw)); } catch { return null; }
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') return null;
+  if (isBlockedProxyHost(url.hostname)) return null;
+  try {
+    const r = await fetch(url.href, { headers: { 'User-Agent': 'ps1emu/1.0' }, redirect: 'follow' });
+    return r.ok ? r : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Capa de um jogo, por nome (exata + aproximada) ou por URL manual:
+ *
+ *   GET /api/cover?system=snes&name=Super%20Mario%20World
+ *   GET /api/cover?system=snes&url=https://exemplo/capa.png
+ *
+ * Serve tanto o Express (`app.get('/api/cover', sendCover)`) quanto a função
+ * serverless da Vercel (`api/cover.js`).
+ */
+export async function sendCover(req, res) {
+  const q = req.query || {};
+  const system = getSystem(String(q.system || '').trim());
+  if (!system) { res.statusCode = 404; return res.end(); }
+
+  const manual = String(q.url || '').trim();
+  if (manual) {
+    const img = await fetchManualCover(manual);
+    if (!img || !img.body) { res.statusCode = 404; return res.end(); }
+    return streamCover(img, res);
+  }
+
+  const name = String(q.name || '').trim();
+  if (!name) { res.statusCode = 400; return res.end(); }
+
+  const repos = boxartRepos(system.id);
+  if (!repos.length) { res.statusCode = 404; return res.end(); }
+
+  let url;
+  if (hasCachedCoverUrl(system.id, name)) {
+    url = getCachedCoverUrl(system.id, name);
+  } else {
+    url = await resolveCoverUrl(repos, name);
+    setCachedCoverUrl(system.id, name, url);
+  }
+  if (!url) { res.statusCode = 404; return res.end(); }
+
+  try {
+    const img = await fetch(url);
+    if (!img.ok || !img.body) { res.statusCode = 502; return res.end(); }
+    streamCover(img, res);
+  } catch (error) {
+    console.error('[COVER] Erro ao buscar capa:', error.message);
+    if (!res.headersSent) { res.statusCode = 502; res.end(); }
+  }
 }
 
 /** Cache do de-para nome→URL (evita refazer HEAD/busca a cada request). */

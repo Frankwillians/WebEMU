@@ -1167,13 +1167,15 @@
     });
   }
 
-  // Endpoint de capa deste console (no Vercel com backend local usa o proxy
-  // /api/cover para escapar do Mixed Content).
+  // Origem onde a capa é pedida. A capa depende só de nome + console (catálogo
+  // externo), então usamos a origem da própria página sempre que o backend
+  // configurado seria bloqueado por Mixed Content (ou quando não há backend):
+  // no servidor local é a rota `/api/cover` do Express e no site publicado é a
+  // função `/api/cover` da Vercel — mesmo código, sem depender do PC dos jogos.
   function coverEndpoint(sys, query) {
-    var localBase = getApiBase();
-    var needsProxy = location.protocol === 'https:' && /^http:/i.test(localBase);
-    if (needsProxy) return '/api/cover?system=' + encodeURIComponent(sys.id) + '&' + query;
-    return localBase + '/api/systems/' + encodeURIComponent(sys.id) + '/cover?' + query;
+    var base = precisaProxy() ? '' : getApiBase();
+    if (!base && IS_FILE) base = 'http://localhost:3000';
+    return base + '/api/cover?system=' + encodeURIComponent(sys.id) + '&' + query;
   }
   // Capa pelo nome do jogo: o servidor tenta o nome exato e, se não achar, uma
   // busca aproximada dentro do catálogo daquele console.
