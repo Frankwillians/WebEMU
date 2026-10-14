@@ -7,10 +7,11 @@ import express from 'express';
 import { createServer } from 'http';
 import { createServer as createHttpsServer } from 'https';
 import cors from 'cors';
-import { join, resolve, sep, basename } from 'path';
+import { join, resolve, sep, basename, dirname, relative } from 'path';
 import { fileURLToPath } from 'url';
 import { networkInterfaces, hostname } from 'os';
 import { existsSync, mkdirSync, statSync, readdirSync, readFileSync } from 'fs';
+import { writeFile } from 'fs/promises';
 import { execFile } from 'node:child_process';
 
 /**
@@ -898,6 +899,55 @@ app.post('/api/systems/:id/rescan', async (req, res) => {
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
+});
+
+// Cria uma playlist .m3u (multi-disco) a partir de jogos JÁ indexados.
+// O arquivo vai para a pasta do primeiro disco e referencia os demais por
+// caminho relativo a ela — é assim que os cores do LibRetro resolvem a lista.
+app.post('/api/systems/:id/m3u', async (req, res) => {
+  const system = getSystem(req.params.id);
+  const storage = storageFor(req.params.id);
+  if (!system || !storage) return res.status(404).json({ error: 'Console não encontrado' });
+
+  const ids = (req.body && Array.isArray(req.body.gameIds)) ? req.body.gameIds : [];
+  if (ids.length < 2) return res.status(400).json({ error: 'Selecione pelo menos 2 discos' });
+
+  await storage.scanGames();
+  const games = [];
+  for (const id of ids) {
+    const g = await storage.getGame(id);
+    if (!g) return res.status(400).json({ error: 'Jogo não encontrado: ' + id });
+    if (g.extension === '.m3u') return res.status(400).json({ error: 'Não dá para incluir um .m3u dentro de outro' });
+    games.push(g);
+  }
+
+  // Nome (sanitizado). Padrão: nome do primeiro disco, sem sufixos de disco.
+  const rawName = String((req.body && req.body.name) || '').trim() || games[0].name;
+  const safeName = rawName
+    .replace(/[<>:"/\\|?*\x00-\x1f]/g, '_')
+    .replace(/\s+/g, ' ')
+    .replace(/\.+$/, '')
+    .slice(0, 80)
+    .trim() || 'playlist';
+
+  const root = storage.getGamesDir();
+  const baseDir = dirname(games[0].fullPath);
+  if (baseDir !== root && !baseDir.startsWith(root + sep)) {
+    return res.status(403).json({ error: 'Acesso negado' });
+  }
+
+  // Caminhos relativos à playlist, com barras normais (padrão .m3u).
+  const lines = games.map((g) => relative(baseDir, g.fullPath).replace(/\\/g, '/'));
+
+  try {
+    await writeFile(join(baseDir, safeName + '.m3u'), lines.join('\n') + '\n', 'utf8');
+  } catch (error) {
+    console.error('[API] Falha ao gravar .m3u:', error.message);
+    return res.status(500).json({ error: 'Falha ao gravar .m3u: ' + error.message });
+  }
+
+  await storage.scanGames(true);
+  res.json({ ok: true, file: safeName + '.m3u', count: lines.length });
 });
 
 // Abre um jogo no emulador NATIVO (RetroArch) do PC servidor.

@@ -366,6 +366,22 @@ ambiente:
 $env:GAMES_DIR="D:\PS1\ISOs"; npm start
 ```
 
+### Multi-disco (.m3u)
+
+Jogos com vários CDs (ex.: RPGs de PS1/Saturn/Sega CD) rodam como uma
+**playlist `.m3u`** que lista os discos na ordem. Pela interface:
+
+1. No cartão **Jogos da rede**, clique em **🧩 Criar .m3u** (entra no modo de seleção).
+2. Clique nos discos que formam o jogo (na ordem: Disco 1, 2, 3…).
+3. Dê um nome (ou deixe em branco) e clique em **Criar**.
+
+A playlist é gravada na pasta do console e passa a aparecer na biblioteca como
+um jogo normal — é só dar **▶ Jogar**. Para trocar de disco no meio do jogo, o
+core lê a lista (o `.m3u` referencia os discos por caminho relativo).
+
+> O console precisa listar `.m3u` entre as extensões aceitas (PS1, Saturn,
+> Sega CD, PC-FX).
+
 ### API de configuração
 
 | Método | Rota              | Descrição                                       |
@@ -385,6 +401,7 @@ $env:GAMES_DIR="D:\PS1\ISOs"; npm start
 | GET    | `/api/systems`                       | Lista os consoles, contagem de jogos, modos e BIOS   |
 | GET    | `/api/systems/:id/games`             | Lista os jogos do console (indexado do disco)        |
 | POST   | `/api/systems/:id/rescan`            | Reindexa a pasta do console                          |
+| POST   | `/api/systems/:id/m3u`               | **Cria playlist `.m3u`** (multi-disco) a partir de `gameIds` |
 | GET    | `/api/systems/:id/cover?name=<nome>` | **Capa do jogo** (proxy do libretro-thumbnails, com cache) |
 | GET    | `/roms/:systemId/...`                | Arquivos do console (com Range)                      |
 | POST   | `/api/systems/:id/launch`            | Abre o jogo no RetroArch do PC (modo “PC servidor”)  |
@@ -563,7 +580,7 @@ engrenagem). Gamepads USB/Bluetooth funcionam automaticamente (Gamepad API).
 - [ ] Conquistas / saves na nuvem local
 - [x] Biblioteca com capas e metadados (libretro-thumbnails via `/api/systems/:id/cover`)
 - [x] Busca de jogos por nome na lista do console
-- [ ] Suporte a multi-disco (.m3u) pela interface
+- [x] **Multi-disco (`.m3u`) pela interface** — selecione 2+ discos na lista do console e clique em **🧩 Criar .m3u** (grava a playlist na pasta do console)
 
 ### 🔜 Fase 3 — Netplay avançado
 - [ ] Rollback real (save/restore de estados por frame)

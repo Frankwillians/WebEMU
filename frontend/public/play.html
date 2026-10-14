@@ -159,6 +159,13 @@
     .game-actions { display: flex; gap: 6px; margin-top: auto; }
     .game-actions .btn { flex: 1; justify-content: center; padding: 6px 4px; }
 
+    /* Multi-disco (.m3u): seleção de discos na grade */
+    .m3u-pick { position: absolute; top: 6px; left: 6px; z-index: 2; width: 20px; height: 20px; margin: 0; cursor: pointer; accent-color: #3b82f6; display: none; }
+    .games-grid.m3u-mode .m3u-pick { display: block; }
+    .games-grid.m3u-mode .game-card { cursor: pointer; }
+    .games-grid.m3u-mode .game-card.sel { border-color: #3b82f6; box-shadow: 0 0 0 2px #3b82f6 inset; }
+    .games-grid.m3u-mode .game-actions { display: none; }
+
     .core-opt { display: flex; gap: 10px; align-items: flex-start; padding: 10px; border: 1px solid #243044; border-radius: 10px; background: #0e1624; margin-bottom: 8px; cursor: pointer; }
     .core-opt input { margin-top: 3px; }
     .core-opt b { font-size: 13px; }
@@ -547,7 +554,15 @@
       <h2><span class="ico">📚</span> Jogos da rede</h2>
       <div class="row between">
         <span class="status-line" id="games-count">—</span>
-        <button id="btn-refresh-games" class="btn sm" type="button">🔄 Atualizar</button>
+        <div class="row" style="gap:6px">
+          <button id="btn-make-m3u" class="btn sm" type="button" title="Juntar vários discos em uma playlist .m3u">🧩 Criar .m3u</button>
+          <button id="btn-refresh-games" class="btn sm" type="button">🔄 Atualizar</button>
+        </div>
+      </div>
+      <div id="m3u-bar" class="row hidden" style="margin-top:8px;gap:6px">
+        <input id="m3u-name" class="input" type="text" placeholder="Nome da playlist" spellcheck="false" />
+        <button id="btn-m3u-create" class="btn sm primary" type="button">Criar</button>
+        <button id="btn-m3u-cancel" class="btn sm" type="button">Cancelar</button>
       </div>
       <div class="row" style="margin-top:8px">
         <input id="game-filter" class="input" type="search" placeholder="🔎 Buscar jogo pelo nome…" spellcheck="false" />
@@ -976,6 +991,7 @@
     el('dir-view').textContent = sys.dir || '—';
     el('games-count').textContent = '—';
     el('games-list').innerHTML = '<div class="empty">Carregando…</div>';
+    setM3uMode(false);
 
     updateModeDependent(sys);
   }
@@ -1111,6 +1127,57 @@
   }
 
   // ------------------------------------------------------------------ games
+
+  // ---- multi-disco (.m3u): seleção de discos -------------------------------
+  var m3uMode = false;
+  var m3uSelected = {};
+
+  function updateM3uCount() {
+    var input = el('m3u-name');
+    var n = Object.keys(m3uSelected).length;
+    if (input) input.placeholder = n ? ('Nome da playlist (' + n + ' disco(s))') : 'Nome da playlist';
+  }
+  function toggleM3uPick(id, on) {
+    if (on) m3uSelected[id] = true; else delete m3uSelected[id];
+    updateM3uCount();
+  }
+  function setM3uMode(on) {
+    m3uMode = !!on;
+    m3uSelected = {};
+    var list = el('games-list');
+    if (list) {
+      list.classList.toggle('m3u-mode', m3uMode);
+      Array.prototype.forEach.call(list.querySelectorAll('.game-card'), function (c) {
+        c.classList.remove('sel');
+        var p = c.querySelector('.m3u-pick');
+        if (p) p.checked = false;
+      });
+    }
+    if (el('m3u-bar')) el('m3u-bar').classList.toggle('hidden', !m3uMode);
+    if (el('btn-make-m3u')) el('btn-make-m3u').classList.toggle('primary', m3uMode);
+    if (el('m3u-name')) el('m3u-name').value = '';
+    updateM3uCount();
+  }
+  function createM3u() {
+    if (!currentSystem) return;
+    var ids = Object.keys(m3uSelected);
+    if (ids.length < 2) { alert('Selecione ao menos 2 discos para montar a playlist.'); return; }
+    var name = el('m3u-name').value.trim();
+    api('/api/systems/' + encodeURIComponent(currentSystem.id) + '/m3u', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: name, gameIds: ids })
+    }).then(function (r) {
+      if (!r.ok) return r.json().then(function (j) { throw new Error(j.error || ('HTTP ' + r.status)); });
+      return r.json();
+    }).then(function () {
+      setM3uMode(false);
+      refreshGames();
+    }).catch(function (e) {
+      alert('Falha ao criar .m3u: ' + (e && e.message ? e.message : e));
+    });
+  }
+
   function loadGames(sys) {
     var box = el('games-list');
     var count = el('games-count');
@@ -1191,11 +1258,30 @@
     play.type = 'button';
     play.className = 'btn sm primary';
     play.textContent = '▶ Jogar';
-    play.onclick = function () { playGame(sys, g); };
+    play.onclick = function () { if (m3uMode) return; playGame(sys, g); };
     actions.appendChild(play);
     body.appendChild(name);
     body.appendChild(meta);
     body.appendChild(actions);
+
+    // Seleção para playlist .m3u (checkbox visível só no modo de seleção).
+    var pick = document.createElement('input');
+    pick.type = 'checkbox';
+    pick.className = 'm3u-pick';
+    pick.title = 'Selecionar para a playlist .m3u';
+    pick.onclick = function (ev) { ev.stopPropagation(); };
+    pick.onchange = function () {
+      card.classList.toggle('sel', pick.checked);
+      toggleM3uPick(g.id, pick.checked);
+    };
+    cover.appendChild(pick);
+    card.dataset.gameId = g.id;
+    card.addEventListener('click', function () {
+      if (!m3uMode) return;
+      pick.checked = !pick.checked;
+      card.classList.toggle('sel', pick.checked);
+      toggleM3uPick(g.id, pick.checked);
+    });
 
     card.appendChild(cover);
     card.appendChild(body);
@@ -3342,6 +3428,17 @@
     });
 
     el('btn-refresh-games').addEventListener('click', refreshGames);
+
+    // Multi-disco (.m3u)
+    el('btn-make-m3u').addEventListener('click', function () { setM3uMode(!m3uMode); });
+    el('btn-m3u-cancel').addEventListener('click', function () { setM3uMode(false); });
+    el('btn-m3u-create').addEventListener('click', createM3u);
+    (function () {
+      var n = el('m3u-name');
+      if (n) n.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter') { e.preventDefault(); createM3u(); }
+      });
+    })();
 
     // Jogar por link (URL)
     el('btn-rom-url').addEventListener('click', playByUrl);

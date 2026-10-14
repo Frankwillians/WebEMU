@@ -66,7 +66,7 @@ Consoles configurados (29) — definidos em `src/backend/systems.js`:
 `segaMS`, `segaGG`, `segaCD`, `sega32x`, `segaSaturn`, `atari2600`, `atari7800`,
 `lynx`, `jaguar`, `arcade`, `pce`, `ngp`, `ws`, `3do`, `pcfx`, `c64`, `dos`, `amiga`.
 
-Dois "motores" de emulação coexistem:
+Quatro "motores" de emulação coexistem:
 
 | Motor | Onde roda | Quando |
 |-------|-----------|--------|
@@ -126,6 +126,7 @@ ps1emu/
 ├── ps1emu.config.json     Config local em runtime (ignorado no git)
 ├── .env.example           Modelo de variáveis de ambiente
 ├── package.json           Scripts e dependências do backend
+├── SKILL.md               Skill do projeto (guia de desenvolvimento)
 └── AGENTS.md              Este arquivo
 ```
 
@@ -139,7 +140,7 @@ ps1emu/
 
 ```bash
 npm install              # dependências do backend
-npm run build            # compila o React legado (opcional p/ jogar)
+npm run build            # compila o React legado (referência; NÃO é servido)
 npm start                # sobe o backend em http://localhost:3000
 npm run dev              # backend (watch) + frontend React (vite) em paralelo
 npm run cert             # gera certs/ p/ HTTPS local (PSP/DOS precisam)
@@ -174,7 +175,6 @@ Definidas em `src/backend/config.js` (lidas do ambiente / `.env`):
 |----------|--------|--------|
 | `HTTP_PORT` | `3000` | Porta HTTP (API + estáticos) |
 | `HTTPS_PORT` | `3443` | Porta HTTPS (só sobe se houver `certs/`) |
-| `WS_PORT` | `8080` | Porta WS legada (mantida por compatibilidade) |
 | `GAMES_DIR` | `<raiz>/games` | Pasta de ROMs/ISOs de PS1 |
 | `BIOS_DIR` | `<raiz>/bios` | Pasta de BIOS |
 | `PS2_DIR` | `<raiz>/ps2games` | Pasta de ISOs de PS2 |
@@ -217,7 +217,7 @@ O PC servidor ainda pode **abrir o jogo no RetroArch nativo** via
 ### 6.2 Netplay (WebRTC P2P)
 
 ```
-Nutrição da sala:  WebSocket de sinalização  (LAN: /signaling | Online: /api/ws)
+Sinalização da sala: WebSocket  (LAN: /signaling | Online: /api/ws)
 Mídia e inputs:    WebRTC (P2P) — o HOST emula e transmite; convidados só mandam input
 ```
 
@@ -239,6 +239,10 @@ Mídia e inputs:    WebRTC (P2P) — o HOST emula e transmite; convidados só ma
   `req.query['...all']` (com os três pontos!). Sem o *smart-join* do
   `api/[...all].js`, rotas de vários segmentos (`/api/systems/:id/games`,
   `/api/netplay/ice`) dão **404**. Não mexa nisso sem entender.
+- O servidor de produção serve **apenas o produto**: `play.html` (rotas `/`,
+  `/play`, `/play.html`), `/ps2`, `/recomp`, `/disc`, `/bios`, `/roms` e a API.
+  O **React (`frontend/src`) é referência de código e não é servido** (o
+  *SPA fallback* foi removido).
 
 ---
 
@@ -252,6 +256,7 @@ Mídia e inputs:    WebRTC (P2P) — o HOST emula e transmite; convidados só ma
 | GET | `/api/systems` | Consoles, contagem, modos e BIOS |
 | GET | `/api/systems/:id/games` | Jogos do console (indexado do disco) |
 | POST | `/api/systems/:id/rescan` | Reindexa a pasta do console |
+| POST | `/api/systems/:id/m3u` | Cria playlist `.m3u` (multi-disco) a partir de `{ name, gameIds }` |
 | GET | `/api/systems/:id/cover?name=` | Capa do jogo (proxy com cache) |
 | POST | `/api/systems/:id/launch` | Abre no RetroArch do PC |
 | GET | `/roms/:systemId/*` | Arquivos do console (Range) |
@@ -452,7 +457,7 @@ resultado **verificável** (teste/validação) antes de considerar pronto.
 
 - [ ] Rollback real (save/restore de estado por frame) e sincronização de saves.
 - [ ] Estado das salas em Redis/Marketplace (remover limite de instância da Vercel).
-- [ ] Suporte a multi-disco (`.m3u`) pela interface.
+- [x] Suporte a multi-disco (`.m3u`) pela interface.
 - [ ] Conquistas / saves em nuvem local.
 
 ---
