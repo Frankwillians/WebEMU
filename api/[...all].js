@@ -2,22 +2,22 @@
  * Adaptador serverless da Vercel.
  *
  * Na Vercel o projeto é publicado como site estático (frontend/public) + funções.
- * Este arquivo expõe TODO o backend Express em `/api/*` reaproveitando o
- * `server.js` (que só chama `app.listen` quando NÃO está na Vercel).
+ * Este arquivo reaproveita o `server.js` (que só chama `app.listen` quando NÃO
+ * está na Vercel) para expor o backend em `/api/*`.
  *
  * ---------------------------------------------------------------- CORREÇÃO ---
- * Descoberto na prática: a Vercel entrega o "resto" do caminho
- * como um PARÂMETRO DE QUERY chamado "...all" — com os três pontos! Ou seja:
+ * Quando a Vercel entrega o "resto" do caminho como PARÂMETRO DE QUERY chamado
+ * "...all" — com os três pontos! — o Express só vê o primeiro segmento e não
+ * encontra as rotas de VÁRIOS segmentos (`/api/systems/:id/games`, …):
  *
- *   GET /api/netplay/ice          →  req.url = "/api/netplay?...all=ice"
  *   GET /api/systems/ps1/games    →  req.url = "/api/systems?...all=ps1/games"
- *   GET /api/health               →  req.url = "/api/health?...all=health"
  *
- * Sem corrigir, o Express só vê "/api/netplay" (um segmento) e não encontra as
- * rotas de VÁRIOS segmentos — /api/netplay/ice, /api/systems/:id/games,
- * /api/systems/:id/cover… — devolvendo 404, enquanto as de um segmento
- * (/api/health, /api/systems) funcionavam. Aqui reconstruímos o caminho correto
- * antes de entregar ao Express.
+ * Este adaptador remonta o caminho antes de entregar ao Express.
+ *
+ * **Importante:** verificado em produção, hoje a Vercel **não** entrega rotas de
+ * vários segmentos a esta função — ela responde `NOT_FOUND` por conta própria.
+ * Não conte com elas no site publicado: cada recurso que o site precisa tem
+ * função própria de um segmento (ex.: a capa é `api/cover.js`).
  */
 import app from '../src/backend/server.js';
 
