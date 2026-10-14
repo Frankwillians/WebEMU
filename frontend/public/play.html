@@ -1138,10 +1138,16 @@
   }
 
   // URL da capa (proxy do servidor, que busca no libretro-thumbnails).
+  // No Vercel (HTTPS) com backend local (HTTP), usa proxy Vercel para evitar Mixed Content.
   function coverUrl(sys, g) {
     var base = (g.name || g.fileName || '').replace(/\.[^.]+$/, '');
-    return getApiBase() + '/api/systems/' + encodeURIComponent(sys.id) +
-      '/cover?name=' + encodeURIComponent(base);
+    var localBase = getApiBase();
+    var needsProxy = location.protocol === 'https:' && /^http:/i.test(localBase);
+    if (needsProxy) {
+      // Proxy no Vercel: /api/cover?system=...&name=...
+      return '/api/cover?system=' + encodeURIComponent(sys.id) + '&name=' + encodeURIComponent(base);
+    }
+    return localBase + '/api/systems/' + encodeURIComponent(sys.id) + '/cover?name=' + encodeURIComponent(base);
   }
 
   // Cartão de jogo com capa + ações.
@@ -1219,6 +1225,14 @@
   }
 
   // --------------------------------------------------------------- launching
+  // Detecta se precisamos usar o proxy (HTTPS no Vercel → HTTP no backend local).
+  // Mixed Content bloqueia HTTP direto; o proxy /api/rom no Vercel resolve isso.
+  function precisaProxy() {
+    try {
+      return location.protocol === 'https:' && /^http:/i.test(getApiBase());
+    } catch (e) { return false; }
+  }
+
   function playGame(sys, game) {
     if (getMode(sys) === 'host') { launchNative(sys, game); return; }
     if (sys.kind === 'external') { openExternal(sys, game); return; }
@@ -1228,7 +1242,8 @@
       mode: 'web',
       source: 'url',
       url: game.url,
-      name: game.fileName || game.name
+      name: game.fileName || game.name,
+      proxy: precisaProxy()
     });
     startPlayer();
   }
@@ -1245,7 +1260,7 @@
     var abs;
     try { abs = new URL(raw, location.href); } catch (e) { toast('Link inválido.', 'err'); return; }
     if (abs.protocol !== 'http:' && abs.protocol !== 'https:') { toast('Use um link http(s).', 'err'); return; }
-    var proxy = !!(el('rom-url-proxy') && el('rom-url-proxy').checked);
+    var proxy = !!(el('rom-url-proxy') && el('rom-url-proxy').checked) || precisaProxy();
     var parts = abs.pathname.split('/').filter(Boolean);
     var fileName = parts.length ? decodeURIComponent(parts[parts.length - 1]) : 'jogo.iso';
     if (sys.kind === 'external') {
@@ -1458,7 +1473,15 @@
   function resolveBiosUrl() {
     var bios = getBios();
     if (!bios) return Promise.resolve(null);
-    if (bios.source === 'url') return Promise.resolve(toAbs(bios.url));
+    if (bios.source === 'url') {
+      var url = toAbs(bios.url);
+      var localBase = getApiBase();
+      var needsProxy = location.protocol === 'https:' && /^http:/i.test(localBase);
+      if (needsProxy) {
+        return Promise.resolve('/api/rom?url=' + encodeURIComponent(url));
+      }
+      return Promise.resolve(url);
+    }
     return idbGet(bios.key).then(function (blob) { return blob ? URL.createObjectURL(blob) : null; });
   }
 
