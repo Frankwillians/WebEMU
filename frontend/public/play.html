@@ -216,20 +216,60 @@
     .np-stage video { width: 100%; height: 100%; object-fit: contain; background: #000; display: block; }
     .np-msg { position: absolute; inset: 0; display: grid; place-items: center; text-align: center; padding: 20px;
       color: #cbd5e1; background: rgba(5,8,14,.72); font-size: 14px; }
-    .np-pad { position: absolute; left: 0; right: 0; bottom: 0; z-index: 8; padding: 14px;
-      display: flex; justify-content: space-between; align-items: flex-end; gap: 12px; pointer-events: none; }
+    .np-pad {
+      position: absolute; left: 0; right: 0; bottom: 0; z-index: 8; padding: 14px;
+      display: flex; flex-direction: column; justify-content: flex-end; align-items: stretch; gap: 10px;
+      pointer-events: none; touch-action: none;
+      /* tamanho dos botões: cresce com a tela mas nunca fica pequeno demais no
+         celular (era o principal problema de usar os controles no dedo). */
+      --np-btn: clamp(48px, 12vw, 64px);
+    }
     .np-pad > * { pointer-events: auto; }
-    .np-dpad { display: grid; grid-template-columns: repeat(3, 46px); grid-template-rows: repeat(3, 46px); gap: 4px; }
-    .np-cluster { display: grid; grid-template-columns: repeat(2, 54px); grid-auto-rows: 54px; gap: 8px; }
+    /* SELECT/START numa linha própria, centralizados: assim o D-pad e os botões
+       de ação ficam com espaço garantido mesmo em telas estreitas. */
+    .np-center { display: flex; flex-direction: row; justify-content: center; align-items: center; gap: 20px; }
+    .np-pad-row { display: flex; justify-content: space-between; align-items: flex-end; gap: 12px; width: 100%; pointer-events: none; }
+    .np-pad-row > * { pointer-events: auto; }
+    .np-dpad { display: grid; grid-template-columns: repeat(3, var(--np-btn)); grid-template-rows: repeat(3, var(--np-btn)); gap: 5px; }
+    .np-cluster { display: grid; grid-template-columns: repeat(2, var(--np-btn)); grid-auto-rows: var(--np-btn); gap: 9px; }
     .np-btn {
-      border: 1px solid #33455f; background: rgba(27,39,64,.88); color: #dbe6f6;
-      border-radius: 12px; font-size: 12px; font-weight: 700; display: grid; place-items: center;
-      user-select: none; -webkit-user-select: none; touch-action: none; cursor: pointer;
+      border: 1px solid #3a4d6b; color: #eaf1ff;
+      background: linear-gradient(180deg, rgba(46,62,88,.92), rgba(19,28,44,.92));
+      border-radius: 13px; font-size: clamp(12px, 3.2vw, 15px); font-weight: 800; letter-spacing: .3px;
+      display: grid; place-items: center; padding: 0;
+      user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
+      touch-action: none; cursor: pointer;
+      box-shadow: 0 3px 0 rgba(0,0,0,.45), inset 0 1px 0 rgba(255,255,255,.07);
+      transition: transform .05s ease, background .05s ease, box-shadow .05s ease;
+      backdrop-filter: blur(4px);
     }
     .np-btn.round { border-radius: 50%; }
-    .np-btn.on { background: #2563eb; border-color: #3b82f6; color: #fff; }
-    .np-pill { padding: 10px 16px; border-radius: 999px; }
-    .np-center { display: flex; flex-direction: column; gap: 8px; align-self: center; }
+    .np-btn.on {
+      background: linear-gradient(180deg, #3b82f6, #1d4ed8);
+      border-color: #60a5fa; color: #fff; transform: scale(.93);
+      box-shadow: 0 0 16px rgba(59,130,246,.7), inset 0 1px 0 rgba(255,255,255,.25);
+    }
+    .np-pill { padding: 10px 18px; border-radius: 999px; font-size: 11px; }
+
+    /* ---------- tela cheia ---------- */
+    /* Botão para sair (aparece em qualquer modo de tela cheia). */
+    .fs-exit {
+      display: none; position: absolute; z-index: 12;
+      top: calc(8px + env(safe-area-inset-top)); right: calc(8px + env(safe-area-inset-right));
+      width: 42px; height: 42px; border-radius: 12px; border: 1px solid #3a4d6b;
+      background: rgba(16,23,36,.72); color: #e8eefc; font-size: 18px; font-weight: 700;
+      place-items: center; cursor: pointer; backdrop-filter: blur(6px);
+    }
+    body.fs-on .fs-exit { display: grid; }
+    /* Modo tela cheia por CSS — usado no iPhone, onde a Fullscreen API não
+       existe para elementos (só <video>). Aqui o palco ocupa a tela inteira. */
+    body.fs-css { overflow: hidden; }
+    body.fs-css .topbar,
+    body.fs-css .launcher,
+    body.fs-css .player-bar { display: none !important; }
+    body.fs-css .player { height: 100vh; height: 100dvh; }
+    body.fs-css .game-wrap { position: fixed; inset: 0; z-index: 9997; }
+    body.fs-css .np-pad { z-index: 9999; }
 
     /* ===================== MOBILE (o que estava quebrado) ================== */
     @media (max-width: 720px) {
@@ -252,9 +292,17 @@
       .game-name { font-size: 11px; min-height: 28px; }
       .game-actions .btn { padding: 6px 3px; font-size: 11px; }
       .player-bar .name { max-width: 34vw; font-size: 12px; }
-      .np-dpad { grid-template-columns: repeat(3, 42px); grid-template-rows: repeat(3, 42px); }
-      .np-cluster { grid-template-columns: repeat(2, 48px); grid-auto-rows: 48px; }
-      .np-pad { padding: 10px calc(10px + env(safe-area-inset-right)) calc(12px + env(safe-area-inset-bottom)) calc(10px + env(safe-area-inset-left)); }
+      /* barra do player: só ícones para caber tudo numa linha */
+      .player-bar .lbl { display: none; }
+      .player-bar .btn { padding: 7px 9px; }
+      .np-pad {
+        padding: 10px calc(10px + env(safe-area-inset-right)) calc(12px + env(safe-area-inset-bottom)) calc(10px + env(safe-area-inset-left));
+        gap: 8px;
+        /* no celular o tamanho vem do clamp() acima — nada de valor fixo */
+        --np-btn: clamp(46px, 13vw, 58px);
+      }
+      .np-center { gap: 14px; }
+      .np-pill { padding: 9px 14px; }
       .toasts { right: 10px; left: 10px; bottom: calc(10px + env(safe-area-inset-bottom)); max-width: none; }
       .list { max-height: 220px; }
       .panel { margin: 10px 8px; padding: 12px; }
@@ -264,6 +312,13 @@
     @media (max-width: 380px) {
       .top-actions .badge { display: none; }
       .games-grid { grid-template-columns: repeat(2, 1fr); }
+    }
+    /* celular deitado: o jogo fica no topo e os controles embaixo, ocupando
+       pouca altura para não tampar a imagem. */
+    @media (orientation: landscape) and (max-height: 540px) {
+      .np-pad { --np-btn: clamp(40px, 9vh, 52px); gap: 6px; padding: 8px 12px; }
+      .np-center { gap: 12px; }
+      .np-pill { padding: 7px 12px; font-size: 10px; }
     }
   </style>
 </head>
@@ -539,14 +594,16 @@
     <span id="player-core" class="badge"><span class="dot"></span> <span class="core-label">—</span></span>
     <span id="np-badge" class="badge hidden"><span class="dot"></span> <span id="np-badge-txt">—</span></span>
     <div class="spacer" style="flex:1"></div>
-    <button id="btn-restart" class="btn sm" type="button">🔁 Reiniciar</button>
-    <button id="btn-stop" class="btn sm" type="button" title="Para o jogo e volta aos consoles">⏹️ Parar</button>
-    <button id="btn-fullscreen" class="btn sm" type="button">⛶ Tela cheia</button>
-    <button id="btn-change" class="btn sm" type="button">⬅ Trocar jogo</button>
+    <button id="btn-restart" class="btn sm" type="button" title="Reiniciar o jogo">🔁 <span class="lbl">Reiniciar</span></button>
+    <button id="btn-stop" class="btn sm" type="button" title="Para o jogo e volta aos consoles">⏹️ <span class="lbl">Parar</span></button>
+    <button id="btn-pad-toggle" class="btn sm" type="button" title="Mostrar/ocultar os controles na tela">🎮 <span class="lbl">Controles</span></button>
+    <button id="btn-fullscreen" class="btn sm" type="button" title="Tela cheia">⛶ <span class="lbl">Tela cheia</span></button>
+    <button id="btn-change" class="btn sm" type="button" title="Voltar aos consoles">⬅ <span class="lbl">Trocar jogo</span></button>
     <button id="btn-np-exit" class="btn sm hidden" type="button">🚪 Sair da sala</button>
   </div>
   <div class="game-wrap">
     <div id="game"></div>
+    <button id="btn-fs-exit" class="fs-exit" type="button" title="Sair da tela cheia">✕</button>
     <div id="boot-overlay" class="loading-overlay">
       <div>
         <div class="spinner"></div>
@@ -1362,6 +1419,12 @@
     var coreEl = el('player-core');
     if (coreEl) coreEl.querySelector('.core-label').textContent = label;
     window.scrollTo(0, 0);
+    // Controles na tela também para o HOST (no celular dá para jogar sem
+    // controle físico). Em aparelhos de toque aparecem sozinhos.
+    npBuildPad();
+    var padGuardado = null;
+    try { padGuardado = localStorage.getItem('np_pad'); } catch (e) {}
+    npMostrarPad(padGuardado === null ? npEhToque() : padGuardado === '1');
     // Se o host está numa sala, começa (ou retoma) a transmissão da partida
     // para os convidados que já estão esperando.
     npHostRecheckStream();
@@ -2366,7 +2429,12 @@
     el('game').innerHTML = '';
     npBuildStage(); npBuildPad();
     if (el('np-stage-msg')) { el('np-stage-msg').style.display = ''; el('np-stage-msg').textContent = 'Conectando ao host…'; }
-    show(el('np-stage')); show(el('np-pad'));
+    show(el('np-stage'));
+    // Controles na tela: mostra por padrão em aparelhos de toque; o jogador pode
+    // esconder/mostrar pelo botão 🎮 Controles a qualquer momento.
+    var padGuardado = null;
+    try { padGuardado = localStorage.getItem('np_pad'); } catch (e) {}
+    npMostrarPad(padGuardado === null ? npEhToque() : padGuardado === '1');
     hideBootOverlay();
     npSetGuestChrome(true);
     updateNpBadge();
@@ -2392,16 +2460,50 @@
     wrap.appendChild(stage);
   }
 
+  // Vibração curta ao apertar (deixa a sensação de botão físico).
+  function npVibrar(ms) {
+    try { if (navigator.vibrate) navigator.vibrate(ms || 12); } catch (e) {}
+  }
+
   function npPadButton(label, index, cls) {
     var b = document.createElement('button');
     b.type = 'button';
     b.className = 'np-btn' + (cls ? ' ' + cls : '');
     b.textContent = label;
-    b.addEventListener('pointerdown', function (ev) { ev.preventDefault(); b.classList.add('on'); npGuestSend(index, 1); });
-    var up = function (ev) { if (ev) ev.preventDefault(); b.classList.remove('on'); npGuestSend(index, 0); };
-    b.addEventListener('pointerup', up);
-    b.addEventListener('pointercancel', up);
-    b.addEventListener('pointerleave', function () { if (b.classList.contains('on')) up(null); });
+    var ativo = false;
+
+    function ligar(ev) {
+      if (ev && ev.preventDefault) ev.preventDefault();
+      if (ativo) return;
+      ativo = true;
+      b.classList.add('on');
+      npSendInput(index, 1);
+      npVibrar(12);
+      // "Prende" o toque neste botão: se o dedo escorregar um pouco para o lado
+      // o botão NÃO solta sozinho (antes soltava e o comando saía cortado).
+      try {
+        if (b.setPointerCapture && ev && ev.pointerId !== undefined) b.setPointerCapture(ev.pointerId);
+      } catch (e) {}
+    }
+    function desligar(ev) {
+      if (ev && ev.preventDefault) ev.preventDefault();
+      if (!ativo) return;
+      ativo = false;
+      b.classList.remove('on');
+      npSendInput(index, 0);
+    }
+
+    if (window.PointerEvent) {
+      b.addEventListener('pointerdown', ligar);
+      b.addEventListener('pointerup', desligar);
+      b.addEventListener('pointercancel', desligar);
+      b.addEventListener('lostpointercapture', function () { desligar(null); });
+    } else {
+      // Navegador antigo sem Pointer Events: usa toque direto.
+      b.addEventListener('touchstart', ligar, { passive: false });
+      b.addEventListener('touchend', desligar, { passive: false });
+      b.addEventListener('touchcancel', desligar, { passive: false });
+    }
     b.addEventListener('contextmenu', function (ev) { ev.preventDefault(); });
     return b;
   }
@@ -2414,6 +2516,12 @@
     pad.id = 'np-pad';
     pad.className = 'np-pad hidden';
 
+    // SELECT/START numa linha própria, centralizados acima do D-pad.
+    var center = document.createElement('div');
+    center.className = 'np-center';
+    center.appendChild(npPadButton('SELECT', 2, 'np-pill'));
+    center.appendChild(npPadButton('START', 3, 'np-pill'));
+
     var dpad = document.createElement('div');
     dpad.className = 'np-dpad';
     [
@@ -2421,11 +2529,6 @@
       npPadButton('◀', 6, 'round'), null, npPadButton('▶', 7, 'round'),
       null, npPadButton('▼', 5, 'round'), null
     ].forEach(function (c) { dpad.appendChild(c || document.createElement('div')); });
-
-    var center = document.createElement('div');
-    center.className = 'np-center';
-    center.appendChild(npPadButton('SELECT', 2, 'np-pill'));
-    center.appendChild(npPadButton('START', 3, 'np-pill'));
 
     var cluster = document.createElement('div');
     cluster.className = 'np-cluster';
@@ -2435,10 +2538,113 @@
       npPadButton('Y', 1, 'round'), npPadButton('B', 0, 'round')
     ].forEach(function (b) { cluster.appendChild(b); });
 
-    pad.appendChild(dpad);
+    var row = document.createElement('div');
+    row.className = 'np-pad-row';
+    row.appendChild(dpad);
+    row.appendChild(cluster);
+
     pad.appendChild(center);
-    pad.appendChild(cluster);
+    pad.appendChild(row);
     wrap.appendChild(pad);
+  }
+
+  // ---------------------------------------------- mostrar/ocultar controles
+  function npPadVisivel() {
+    var p = el('np-pad');
+    return !!(p && !p.classList.contains('hidden'));
+  }
+
+  function npMostrarPad(on) {
+    npBuildPad();
+    var pad = el('np-pad');
+    if (pad) pad.classList.toggle('hidden', !on);
+    var b = el('btn-pad-toggle');
+    if (b) b.classList.toggle('on', !!on);
+    try { localStorage.setItem('np_pad', on ? '1' : '0'); } catch (e) {}
+  }
+
+  function npTogglePad() { npMostrarPad(!npPadVisivel()); }
+
+  // O botão só é útil em aparelhos de toque (mouse usa teclado/controle).
+  function npEhToque() {
+    try {
+      if ((navigator.maxTouchPoints || 0) > 0) return true;
+      return window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
+    } catch (e) { return false; }
+  }
+
+  // --------------------------------------------------------------- tela cheia
+  // O que estava errado: o código antigo usava só `document.fullscreenElement`
+  // e `wrap.requestFullscreen()`. Isso NÃO existe no iPhone (o Safari só faz
+  // tela cheia em <video>) e em vários Androids o método tem prefixo
+  // (webkitRequestFullscreen). Resultado: o botão não fazia nada no celular.
+  // Agora tentamos todos os prefixos e, se não houver suporte, caímos num modo
+  // "tela cheia por CSS" (o palco ocupa a tela inteira).
+  function npFsElement() {
+    return document.fullscreenElement || document.webkitFullscreenElement ||
+      document.webkitCurrentFullScreenElement || document.mozFullScreenElement ||
+      document.msFullscreenElement || null;
+  }
+
+  function npAplicarTelaCheia(on) {
+    document.body.classList.toggle('fs-on', !!on);
+    var b = el('btn-fullscreen');
+    if (b) {
+      b.innerHTML = on
+        ? '⛶ <span class="lbl">Sair da tela cheia</span>'
+        : '⛶ <span class="lbl">Tela cheia</span>';
+      b.title = on ? 'Sair da tela cheia' : 'Tela cheia';
+    }
+  }
+
+  function npGirarTela() {
+    try {
+      if (screen.orientation && screen.orientation.lock) {
+        var p = screen.orientation.lock('landscape');
+        if (p && p.catch) p.catch(function () {});
+      }
+    } catch (e) {}
+  }
+
+  function npEntrarTelaCheia() {
+    var alvo = document.querySelector('.game-wrap') || document.documentElement;
+    var fn = alvo.requestFullscreen || alvo.webkitRequestFullscreen ||
+      alvo.webkitRequestFullScreen || alvo.mozRequestFullScreen || alvo.msRequestFullscreen;
+
+    if (fn) {
+      try {
+        var p = fn.call(alvo);
+        npAplicarTelaCheia(true);
+        npGirarTela();
+        if (p && p.catch) {
+          p.catch(function () {
+            // O navegador recusou (ex.: iPhone) → modo CSS.
+            document.body.classList.add('fs-css');
+            npAplicarTelaCheia(true);
+            npGirarTela();
+          });
+        }
+        return;
+      } catch (e) { /* cai no modo CSS abaixo */ }
+    }
+    // Sem Fullscreen API (iPhone): tela cheia "por CSS".
+    document.body.classList.add('fs-css');
+    npAplicarTelaCheia(true);
+    npGirarTela();
+  }
+
+  function npSairTelaCheia() {
+    var sair = document.exitFullscreen || document.webkitExitFullscreen ||
+      document.webkitCancelFullScreen || document.mozCancelFullScreen || document.msExitFullscreen;
+    if (sair && npFsElement()) { try { sair.call(document); } catch (e) {} }
+    document.body.classList.remove('fs-css');
+    npAplicarTelaCheia(false);
+    try { if (screen.orientation && screen.orientation.unlock) screen.orientation.unlock(); } catch (e) {}
+  }
+
+  function npToggleTelaCheia() {
+    if (document.body.classList.contains('fs-css') || npFsElement()) npSairTelaCheia();
+    else npEntrarTelaCheia();
   }
 
   // ------------------------------------------------------- host: transmissão
@@ -2655,8 +2861,19 @@
     }
   }
 
-  function npGuestSend(index, value) {
-    if (NP.isHost || !NP.roomId) return;
+  // Manda um botão para o jogo.
+  //  • HOST  → aplica direto no emulador local (assim o host também joga pelo
+  //            celular, sem controle físico).
+  //  • CONVIDADO → envia pela rede; o host aplica no emulador dele.
+  function npSendInput(index, value) {
+    if (NP.isHost) {
+      var emu = window.EJS_emulator;
+      if (emu && emu.gameManager && emu.gameManager.functions && emu.gameManager.functions.simulateInput) {
+        try { emu.gameManager.functions.simulateInput(0, index, value); } catch (e) {}
+      }
+      return;
+    }
+    if (!NP.roomId) return;
     var msg = JSON.stringify({ player: NP.myPlayerIndex, index: index, value: value });
     for (var id in NP.peers) {
       var e = NP.peers[id];
@@ -2790,14 +3007,14 @@
       var idx = NP_KEYS[(e.key || '').toLowerCase()];
       if (idx === undefined) return;
       e.preventDefault();
-      if (!e.repeat) npGuestSend(idx, 1);
+      if (!e.repeat) npSendInput(idx, 1);
     });
     document.addEventListener('keyup', function (e) {
       if (NP.isHost || !NP.roomId) return;
       var idx = NP_KEYS[(e.key || '').toLowerCase()];
       if (idx === undefined) return;
       e.preventDefault();
-      npGuestSend(idx, 0);
+      npSendInput(idx, 0);
     });
 
     el('btn-home').addEventListener('click', function () {
@@ -2883,11 +3100,20 @@
       npStopGame();
       toast('Jogo parado. Nada fica rodando ao fundo.', 'ok');
     });
-    el('btn-fullscreen').addEventListener('click', function () {
-      var wrap = document.querySelector('.game-wrap');
-      if (document.fullscreenElement) document.exitFullscreen();
-      else if (wrap.requestFullscreen) wrap.requestFullscreen();
-    });
+    el('btn-pad-toggle').addEventListener('click', npTogglePad);
+    el('btn-fullscreen').addEventListener('click', npToggleTelaCheia);
+    if (el('btn-fs-exit')) el('btn-fs-exit').addEventListener('click', npSairTelaCheia);
+
+    // Mantém o botão/label em sincronia quando o navegador entra/sai da tela
+    // cheia por conta própria (tecla Esc, gesto do sistema, etc.).
+    ['fullscreenchange', 'webkitfullscreenchange', 'mozfullscreenchange', 'MSFullscreenChange']
+      .forEach(function (ev) {
+        document.addEventListener(ev, function () {
+          var nativo = !!npFsElement();
+          if (nativo) { document.body.classList.remove('fs-css'); npAplicarTelaCheia(true); }
+          else if (!document.body.classList.contains('fs-css')) npAplicarTelaCheia(false);
+        });
+      });
   }
 
   document.addEventListener('DOMContentLoaded', function () {
