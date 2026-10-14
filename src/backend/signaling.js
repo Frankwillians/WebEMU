@@ -234,7 +234,10 @@ export function attachSignaling(wss) {
 
     ws.on('close', () => {
       lobbyWatchers.delete(ws);
-      if (currentPeer && currentRoomId) {
+      // Só remove o peer se ESTE socket ainda for o dono dele. Numa retomada de
+      // sessão o peer é reaproveitado por outra conexão; sem esta guarda, o
+      // fechamento da conexão antiga derrubaria a sessão nova.
+      if (currentPeer && currentRoomId && currentPeer.ws === ws) {
         removePeer(rooms.get(currentRoomId), currentPeer);
       }
       currentPeer = null;
@@ -246,7 +249,9 @@ export function attachSignaling(wss) {
     });
 
     function leaveRoom() {
-      if (currentPeer && currentRoomId) removePeer(rooms.get(currentRoomId), currentPeer);
+      if (currentPeer && currentRoomId && currentPeer.ws === ws) {
+        removePeer(rooms.get(currentRoomId), currentPeer);
+      }
       currentPeer = null;
       currentRoomId = null;
     }
@@ -324,12 +329,22 @@ export function attachSignaling(wss) {
         return;
       }
 
-      // Reconexão por token de sessão (mesmo navegador = mesmo jogador)
+      // Sessão por token (mesmo navegador = mesmo jogador). O token vive em
+      // localStorage, portanto é o MESMO entre abas/janelas do mesmo navegador.
       const sessionToken = payload.sessionToken ? String(payload.sessionToken).trim() : '';
       if (sessionToken) {
         for (const [existingPeerId, existingPeer] of room.peers) {
           if (existingPeer.sessionToken === sessionToken) {
-            // Mesmo jogador reconectando — atualiza o WebSocket e mantém o playerIndex
+            // Se o peer ainda está conectado, é OUTRA ABA/JANELA do mesmo
+            // navegador. Recusamos: não criamos um jogador extra e não roubamos o
+            // WebSocket (senão uma aba derrubaria a outra). Um navegador = um jogador.
+            if (existingPeer.ws && existingPeer.ws.readyState === WebSocket.OPEN) {
+              console.log(`[SIGNALING] Sessão ${sessionToken} já ativa em ${roomId} — aba duplicada recusada`);
+              sendError(ws, 'Você já está nesta sala em outra aba/janela deste navegador.');
+              return;
+            }
+            // Peer saiu de verdade (ws fechado) — retoma a MESMA sessão
+            // (mesmo playerIndex), sem criar um jogador novo.
             console.log(`[SIGNALING] Reconexão: ${existingPeerId} (player ${existingPeer.playerIndex + 1}) token=${sessionToken}`);
             existingPeer.ws = ws;
             existingPeer.ip = clientIp; // atualiza IP se mudou

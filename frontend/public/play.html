@@ -1520,6 +1520,7 @@
     hide(el('view-system'));
     show(el('view-player'));
     show(el('btn-home'));
+    NP.viewIniciada = true;
     // O jogador local roda o jogo aqui — o "palco" do convidado (tela preta com
     // "Aguardando o host") NUNCA pode ficar por cima do emulador. Sem isso, quem
     // já foi convidado em algum momento via o jogo do host com a tela preta por
@@ -1865,6 +1866,9 @@
     wsUrl: readJSON(LS.npWsUrl) || null,       // URL do sinalizador online (ex.: wss://site.vercel.app/api/ws)
     leaving: false,    // true enquanto o jogador sai da sala de propósito
     guestWatchdog: null, // timer do convidado que pede nova oferta se o vídeo não chega
+    viewIniciada: false, // a view de jogo já foi montada nesta página (host ou convidado)
+    dupRetries: 0,      // tentativas ao ser recusado por "já está em outra aba"
+    pendingPassword: '', // senha usada no join em andamento (para o retry)
     iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
   };
 
@@ -2076,7 +2080,11 @@
         npHostOnSyncRequest(p.fromId);
         break;
       case 'kicked':
-        toast('Você foi removido da sala.', 'warn');
+        if (p.duplicate) {
+          toast('Esta sala foi aberta em outra aba/janela deste navegador — a mais recente assume o jogo. Um navegador = um jogador.', 'warn', 9000);
+        } else {
+          toast('Você foi removido da sala.', 'warn');
+        }
         npLeave(true);
         break;
       case 'room-closed':
@@ -2094,6 +2102,28 @@
           if (pass !== null) npJoinRoom(rid, pass);
           return;
         }
+        // Recusa por "já está em outra aba": num reload, o servidor pode ainda
+        // não ter processado o fechamento da conexão antiga. Tenta de novo antes
+        // de desistir (a retomada por token assume a sessão existente).
+        if (NP.pendingJoin && /outra aba/i.test(p.message || '') && NP.dupRetries < 2) {
+          NP.dupRetries++;
+          var alvo = NP.pendingJoin;
+          var pw = NP.pendingPassword || '';
+          NP.pendingJoin = null;
+          npSetStatus('Já aberto em outra aba — retomando… (' + NP.dupRetries + '/2)');
+          setTimeout(function () { npJoinRoom(alvo, pw); }, 1300);
+          return;
+        }
+        if (/outra aba/i.test(p.message || '')) {
+          NP.dupRetries = 0;
+          NP.pendingJoin = null;
+          NP.roomId = null;
+          npSetStatus('Fora da sala');
+          toast('Esta sala já está aberta em <b>outra aba/janela</b> deste navegador. ' +
+            'Um navegador = um jogador — use a aba que já está na sala (ou feche-a e tente de novo).', 'warn', 10000);
+          break;
+        }
+        NP.dupRetries = 0;
         NP.pendingJoin = null;
         if (!NP.myId) NP.roomId = null;
         toast('Netplay: ' + escapeHtml(p.message || 'erro'), 'err');
@@ -2116,17 +2146,18 @@
     list.push({ id: p.yourId, playerIndex: NP.myPlayerIndex, name: NP.isHost ? (NP.meta && NP.meta.host) || NP.name : NP.name });
     NP.players = list.sort(function (a, b) { return a.playerIndex - b.playerIndex; });
     NP.pendingJoin = null;
+    NP.dupRetries = 0;
     npRenderRoom();
     // Se é retomada (mesmo navegador reconectou), NÃO recria a view de guest nem
-    // reseta WebRTC — apenas atualiza a lista de jogadores.
-    if (!p.resumed) {
-      if (!NP.isHost) npShowGuest();
-      if (NP.isHost && !eraHost) {
-        npAssumirHost();
-      }
-      npAppendChat('', 'Você entrou na sala ' + NP.roomId + '.', false, true);
-    } else {
+    // reseta WebRTC quando a página já está numa view de jogo. Mas numa página
+    // NOVA (reload/outra aba assumindo a sessão) a view ainda não foi montada —
+    // então mostramos normalmente.
+    if (!NP.isHost && (!p.resumed || !NP.viewIniciada)) npShowGuest();
+    if (NP.isHost && !eraHost) npAssumirHost();
+    if (p.resumed && NP.viewIniciada) {
       npAppendChat('', '🔄 Reconectado à sala ' + NP.roomId + '.', false, true);
+    } else {
+      npAppendChat('', 'Você entrou na sala ' + NP.roomId + '.', false, true);
     }
   }
 
@@ -2249,6 +2280,9 @@
         type: 'join',
         payload: {
           roomId: code, playerIndex: 0, password: pass,
+          // Token de sessão: identifica este navegador. Garante que abrir o link
+          // de convite na MESMA máquina (outra aba) não crie um jogador extra.
+          sessionToken: NP.sessionToken,
           metadata: {
             name: roomName, system: 'snes', systemName: 'SNES',
             gameName: '', host: name, public: !isPrivate, maxPlayers: 4, started: false
@@ -2268,6 +2302,7 @@
     if (!netplayAvailable) { toast('Netplay indisponível neste servidor.', 'warn'); return; }
     NP.isHost = false;
     NP.pendingJoin = roomId;
+    NP.pendingPassword = password || '';
     NP.roomId = roomId;
     npSetStatus('Entrando em ' + roomId + '…');
     npConnect().then(function () {
@@ -2549,6 +2584,7 @@
     if (!window.EJS_emulator) return false;
     hide(el('view-hub')); hide(el('view-system'));
     show(el('view-player')); show(el('btn-home'));
+    NP.viewIniciada = true;
     npBuildStage();
     if (el('np-stage')) el('np-stage').classList.add('hidden'); // palco é do convidado
     npSetGuestChrome(false);
@@ -2648,6 +2684,7 @@
 
     hide(el('view-hub')); hide(el('view-system'));
     show(el('view-player')); show(el('btn-home'));
+    NP.viewIniciada = true;
     if (el('lobby-panel')) el('lobby-panel').classList.add('hidden');
     if (el('player-name')) el('player-name').textContent = (NP.meta && NP.meta.gameName) || NP.roomId || 'Netplay';
     var coreEl = el('player-core');

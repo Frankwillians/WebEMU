@@ -315,12 +315,17 @@ Mensagens do sinalizador (`src/backend/signaling.js`): `join`, `leave`, `offer`,
 
 1. **Um jogador = um `playerIndex` estável.** O índice mapeia 1:1 para a **porta
    de controle** no console. Não reordene índices por acaso.
-2. **Sessão por token.** O frontend guarda `np_session_token` no `localStorage` e
-   envia no `join`. O backend **retoma** o peer existente (mesmo navegador = mesmo
-   jogador) e responde com `resumed: true`. Com `resumed`, o frontend **não**
-   recria a view de convidado nem reseta o WebRTC.
+2. **Sessão por token.** O frontend guarda `np_session_token` no `localStorage`, que
+   é **compartilhado entre abas do mesmo navegador**, e envia no `join` — inclusive
+   ao **criar** sala (`npCreateRoom`). Se o token já está ativo numa conexão aberta,
+   o backend **recusa** a nova ("já está em outra aba"): um navegador = um jogador
+   (evita clicar 2× no link virar vários jogadores). Se o peer caiu (ws fechado), o
+   backend **retoma** a sessão e responde `resumed: true`; aí o frontend não recria
+   a view — *exceto* numa página nova (`NP.viewIniciada`), que precisa montá-la.
 3. **Anti-clone por IP.** Sem token, dois peers do mesmo IP na mesma sala são
    bloqueados. Com tokens diferentes (máquinas/navegadores distintos), ambos entram.
+   O `close`/`leave` só remove o peer se `peer.ws === ws` (uma conexão antiga não
+   pode derrubar a sessão retomada).
 4. **Stream versionado.** `NP.streamVersion` incrementa a cada captura nova.
    Trocar de jogo = **recriar** peer connections (tracks antigas morrem).
 5. **`npHostRecheckStream` tem guard** (`npRecheckBusy`) — nunca deixe rodar dois
@@ -462,6 +467,7 @@ resultado **verificável** (teste/validação) antes de considerar pronto.
 | Jogo continua rodando ao fundo | `🏠 Consoles` deve destruir o núcleo local (solo e host), não só o host |
 | Clicou em 🏠 e não consegue mais voltar/parar | No boot não reabrir o último jogo; abrir no seletor (`showHub()`) |
 | Convidado não conecta "de primeira" | Vigia envia `sync-request`; host refaz a oferta (`npHostOnSyncRequest`); resetar `NP.leaving` |
+| Mesmo navegador vira "Player 2" por aba | `npCreateRoom` deve enviar `sessionToken`; backend recusa token já ativo (outra aba) |
 | Clique duplo no convite cria "Player 2" | Token de sessão (`np_session_token`) + `resumed` |
 | Dois peers do mesmo IP | Anti-clone por IP (sem token) |
 | Lobby some na Vercel | Funções serverless não compartilham memória — limitação conhecida |
