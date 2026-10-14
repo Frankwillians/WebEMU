@@ -343,6 +343,14 @@ Mensagens do sinalizador (`src/backend/signaling.js`): `join`, `leave`, `offer`,
 10. **Mixed Content:** em HTTPS (Vercel), ROMs/capas/BIOS vindos de HTTP local
     passam por proxy (`/api/rom`, `/api/cover`). Use `precisaProxy()`
     (`location.protocol === 'https:' && /^http:/i.test(getApiBase())`).
+    Uma página HTTPS **não** consegue falar direto com API HTTP da LAN
+    (`/api/health`, `/api/discover`, `/api/systems`): o navegador bloqueia. Para
+    jogar pelos arquivos do PC, abra o próprio `http://IP:3000/play.html`.
+10b. **Base da API (`ps1emu.apiBase`) é STRING crua.** `setApiBase` grava string
+    e `getApiBase` lê string (com `normalizarBase` para aceitar `IP:porta`).
+    **Nunca** leia essa chave com `readJSON`/`JSON.parse`: era exatamente o bug
+    em que a base digitada era ignorada e tudo caía no servidor da própria
+    página ("Conectado a https://web-emu.vercel.app").
 11. **Ciclo de vida do jogo local.** No boot o site **não** reabre o último jogo
     (abre no seletor, `showHub()`); `🏠 Consoles` **encerra** o núcleo local
     (`npPararTransmissao` + `npDestroyEmulator`), valendo para solo e host — nada
@@ -461,6 +469,9 @@ resultado **verificável** (teste/validação) antes de considerar pronto.
 | PSP/DOS não iniciam no celular | Falta contexto seguro + COOP/COEP (`npm run cert`, HTTPS) |
 | 404 na Vercel em rotas multi-segmento | Smart-join de `req.query['...all']` em `api/[...all].js` |
 | Capa/ROM bloqueada no Vercel | Mixed Content: use `/api/cover`, `/api/rom` (`precisaProxy()`) |
+| "Conectado a https://web-emu.vercel.app" ao digitar um IP | `getApiBase` lendo a base com `JSON.parse` (gravada crua) — leia string crua; `normalizarBase` |
+| Não acha servidores na rede | Base da API errada (vira o site) ou página HTTPS varrendo a nuvem; conecte antes ao PC (`http://IP:3000`) |
+| Busca de servidores muito lenta | Scan varrendo sub-redes virtuais; pular faixas de VM e limitar por orçamento/concorrência |
 | Convidado não vê, host trava | `streamVersion`/recriação de PC, `npHostRecheckStream`, `track ended` |
 | "Aguardando o host" preso | Só deve aparecer em `failed`/`closed`; limpe estado ao sair |
 | Host vê tela preta "Aguardando o host" | Palco `#np-stage` do convidado sobre o canvas; esconder no `showPlayer`/`npAssumirHost` |

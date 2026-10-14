@@ -361,6 +361,15 @@ function localSubnets() {
   const skip = /hamachi|virtualbox|vmware|hyper-?v|vethernet|loopback|bluetooth|tailscale|zerotier|wintun|wireguard|docker|vpn|tun\b|tap\b/i;
   const subnets = new Set();
 
+  // Faixas /24 típicas de adaptadores SOMENTE-HOST de VMs (VirtualBox, libvirt,
+  // Parallels, QEMU/Docker). No Windows esses adaptadores às vezes ficam com
+  // nome genérico ("Ethernet 2"), então o filtro por nome não basta e a busca
+  // varreria uma rede que não tem servidor nenhum — só perdendo tempo.
+  const VIRTUAL_SUBNETS = new Set([
+    '192.168.56', '192.168.99', '192.168.122', '192.168.64',
+    '172.17.0', '10.0.2', '10.211.55', '10.37.129', '192.168.68'
+  ]);
+
   for (const name of Object.keys(nets)) {
     if (skip.test(name)) continue;
     for (const net of nets[name] || []) {
@@ -370,7 +379,9 @@ function localSubnets() {
       // Só varremos máscaras /24 ou maiores (cabem 254 hosts) para não explodir.
       if (mask[0] !== 255 || mask[1] !== 255 || mask[2] !== 255) continue;
       const parts = net.address.split('.');
-      subnets.add(`${parts[0]}.${parts[1]}.${parts[2]}`);
+      const subnet = `${parts[0]}.${parts[1]}.${parts[2]}`;
+      if (VIRTUAL_SUBNETS.has(subnet)) continue;
+      subnets.add(subnet);
     }
   }
   return Array.from(subnets);
@@ -431,7 +442,7 @@ app.get('/api/discover', async (req, res) => {
   }
 
   async function worker() {
-    while (cursor < targets.length) {
+    while (cursor < targets.length && Date.now() - started < budgetMs) {
       const ip = targets[cursor++];
       // O próprio host responde rápido; deixa para o fim se for muito lento.
       for (const p of ports) {
@@ -464,7 +475,10 @@ app.get('/api/discover', async (req, res) => {
     }
   }
 
-  const CONCURRENCY = 64;
+  // Varredura em paralelo, com teto de tempo: nunca deixa a UI pendurada.
+  // 256 sondagens simultâneas com timeout curto cobrem uma /24 em poucos segundos.
+  const budgetMs = Math.min(9000, Math.max(2500, timeout * 10));
+  const CONCURRENCY = 256;
   await Promise.all(Array.from({ length: CONCURRENCY }, () => worker()));
 
   const servers = Array.from(found.values()).sort((a, b) => {

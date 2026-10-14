@@ -223,9 +223,15 @@ No cartão **Jogos pela rede** (em `/play.html`) há o campo **Servidor**:
 - Digite `http://192.168.0.5:3000` (exemplo) para usar os jogos de **outra
   máquina** que também esteja rodando o backend nesta mesma rede;
 - Clique em **Conectar**. A escolha fica salva no navegador (localStorage).
+  (Pode digitar só `192.168.0.5:3000` — o `http://` é adicionado sozinho.)
 
 Assim o mesmo site pode apontar para qualquer computador que esteja servindo
 uma pasta de jogos.
+
+> ⚠️ **Página HTTPS (Vercel) → servidor HTTP da rede:** o navegador bloqueia
+> esse pedido (Mixed Content). Para jogar pelos arquivos do PC, **abra o próprio
+> endereço do PC** (`http://IP:3000/play.html`), que carrega a página do servidor
+> local (HTTP, sem bloqueio). Um túnel HTTPS também funciona.
 
 ### Descobrir servidores na rede (automático)
 

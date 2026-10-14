@@ -765,14 +765,39 @@
   var serverPublicUrl = '';       // URL pública (túnel) configurada no backend, se houver
   var serverWsUrl = '';           // sinalizador online informado pelo backend (/api/health → ws)
 
-  function getApiBase() { return readJSON(LS.apiBase) || ''; }
+  // Base da API escolhida pelo jogador (ex.: http://192.168.0.5:3000). Guardamos
+  // como STRING pura. ATENÇÃO: antes líamos com readJSON (JSON.parse) e
+  // gravávamos cru — como "http://…" não é JSON, o parse falhava e a base
+  // digitada era SEMPRE ignorada, caindo no servidor da própria página
+  // ("Conectado a https://web-emu.vercel.app"). Não volte a usar readJSON aqui.
+  // Normalizamos na leitura também: valores antigos podem estar sem "http://".
+  function getApiBase() {
+    var raw = String(localStorage.getItem(LS.apiBase) || '').trim();
+    return raw ? normalizarBase(raw) : '';
+  }
+
+  // Normaliza o que o jogador digita: aceita "192.168.0.5:3000", devolve
+  // "http://192.168.0.5:3000" (só esquema+host+porta, sem caminho nem barra).
+  function normalizarBase(v) {
+    var s = String(v == null ? '' : v).trim();
+    if (!s) return '';
+    if (!/^[a-z][a-z0-9+.-]*:\/\//i.test(s)) s = 'http://' + s.replace(/^\/+/, '');
+    try {
+      var u = new URL(s);
+      return u.protocol + '//' + u.host;
+    } catch (e) {
+      return s.replace(/\/+$/, '');
+    }
+  }
+
   function api(path, opts) {
     var url = getApiBase() + path;
     if (accessToken) url += (url.includes('?') ? '&' : '?') + 'token=' + encodeURIComponent(accessToken);
     return fetch(url, opts);
   }
   function setApiBase(v) {
-    if (v) localStorage.setItem(LS.apiBase, v.replace(/\/+$/, ''));
+    var s = normalizarBase(v);
+    if (s) localStorage.setItem(LS.apiBase, s);
     else removeKey(LS.apiBase);
   }
   function serverLabel() { return getApiBase() || (IS_FILE ? 'http://localhost:3000' : location.origin); }
@@ -818,9 +843,26 @@
   // Conecta a um servidor informado (túnel HTTPS ou IP da LAN) e recarrega os
   // consoles/jogos. Usado pelos botões Conectar, Colar e pelo auto-connect.
   function connectToServer(v) {
-    setApiBase(v);
+    var base = normalizarBase(v);
+    setApiBase(base);
     updateServerStatus();
-    if (el('server-status')) el('server-status').innerHTML = '<span class="ok">●</span> Conectando a <b>' + escapeHtml(v || '…') + '</b>…';
+    var alvo = base || serverLabel();
+    if (el('server-status')) el('server-status').innerHTML = '<span class="ok">●</span> Conectando a <b>' + escapeHtml(alvo) + '</b>…';
+
+    // Mixed Content: uma página HTTPS (ex.: Vercel) NÃO consegue falar com um
+    // servidor HTTP da rede local (o navegador bloqueia a requisição). Só
+    // localhost/127.0.0.1 escapam. Avisamos e damos o caminho certo: abrir o
+    // próprio endereço do PC. Sem isso o erro aparece como "Failed to fetch".
+    var isHttp = /^http:/i.test(base);
+    var isLocal = /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/i.test(base);
+    if (location.protocol === 'https:' && isHttp && !isLocal) {
+      var aviso = 'De um site <b>HTTPS</b> o navegador <b>bloqueia</b> a conexão com seu PC em <b>HTTP</b> (Mixed Content).<br>' +
+        'Abra o endereço do PC diretamente: <a href="' + escapeHtml(base) + '/play.html" target="_blank" rel="noopener"><b>' +
+        escapeHtml(base) + '/play.html</b></a>';
+      if (el('server-status')) el('server-status').innerHTML = '<span class="err">●</span> ' + aviso;
+      toast(aviso, 'warn', 14000);
+    }
+
     return checkBackend()
       .then(function () { return loadSystems(); })
       .then(function () {
@@ -831,7 +873,8 @@
         // Quem fecha é o botão "🌐 Servidor".
       })
       .catch(function (e) {
-        toast('Não foi possível conectar em <b>' + escapeHtml(v) + '</b>.<br>Confira se o endereço está certo e se o PC do host está ligado.', 'err');
+        toast('Não foi possível conectar em <b>' + escapeHtml(alvo) + '</b>.<br>' +
+          'Confira o endereço, se o PC do host está ligado e se nada bloqueia a rede (firewall/Mixed Content).', 'err');
         throw e;
       });
   }
@@ -1673,6 +1716,16 @@
     if (btn) btn.disabled = true;
     if (status) status.textContent = 'Procurando servidores na rede… (alguns segundos)';
     if (list) list.innerHTML = '<div class="empty">Sondando a rede…</div>';
+
+    // A varredura é feita POR UM SERVIDOR WebEMU (ele enxerga a rede local onde
+    // roda). Se a página está em um host público (Vercel) e ainda não apontamos
+    // para o PC da rede, a busca roda na rede da nuvem e não acha nada útil.
+    var base = getApiBase();
+    var basePublica = !base && location.protocol === 'https:';
+    if (basePublica) {
+      if (status) status.textContent = 'Conecte antes ao seu PC (endereço http://IP:3000) para varrer a rede dele.';
+    }
+
     api('/api/discover?timeout=450').then(function (r) {
       if (!r.ok) throw new Error('HTTP ' + r.status);
       return r.json();
@@ -1680,8 +1733,13 @@
       renderDiscovered(j);
       if (status) {
         var n = (j.servers || []).length;
+        var redes = (j.networks || []).join(', ');
         status.textContent = n + (n === 1 ? ' servidor encontrado' : ' servidores encontrados') +
-          ' em ' + (Math.round((j.durationMs || 0) / 100) / 10) + 's';
+          (redes ? ' em ' + redes : '') +
+          ' (' + (Math.round((j.durationMs || 0) / 100) / 10) + 's)';
+        if (!n && basePublica) {
+          status.textContent += ' — a página é HTTPS, então a varredura rodou na nuvem. Conecte ao PC da sua rede (http://IP:3000).';
+        }
       }
     }).catch(function (e) {
       if (status) status.textContent = 'Falha na busca: ' + (e && e.message ? e.message : e);
