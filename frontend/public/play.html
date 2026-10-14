@@ -992,6 +992,10 @@
     el('games-count').textContent = '—';
     el('games-list').innerHTML = '<div class="empty">Carregando…</div>';
     setM3uMode(false);
+    // O botão de .m3u só aparece em consoles que aceitam a extensão.
+    if (el('btn-make-m3u')) {
+      el('btn-make-m3u').style.display = (sys.extensions || []).indexOf('.m3u') >= 0 ? '' : 'none';
+    }
 
     updateModeDependent(sys);
   }
