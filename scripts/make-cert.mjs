@@ -14,7 +14,7 @@
  */
 
 import { execFileSync, spawnSync } from 'child_process';
-import { mkdirSync } from 'fs';
+import { mkdirSync, rmSync } from 'fs';
 import { resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { networkInterfaces } from 'os';
@@ -30,8 +30,10 @@ const certPath = resolve(certsDir, 'cert.pem');
 function opensslCandidates() {
   const list = [];
   if (process.env.OPENSSL_BIN) list.push(process.env.OPENSSL_BIN);
-  list.push('openssl');
   if (process.platform === 'win32') {
+    // No Windows preferimos os OpenSSL "completos" (Git for Windows, OpenSSL-Win64)
+    // ANTES do `openssl` do PATH: alguns (ex.: o de uma Anaconda) não acham o
+    // openssl.cnf e falham ao gerar o certificado.
     list.push(
       'C:/Program Files/Git/usr/bin/openssl.exe',
       'C:/Program Files/Git/mingw64/bin/openssl.exe',
@@ -40,14 +42,26 @@ function opensslCandidates() {
       'C:/Program Files/OpenSSL/bin/openssl.exe'
     );
   }
+  list.push('openssl');
   return list;
 }
 
 function findOpenssl() {
+  const probeKey = resolve(certsDir, '.probe-key.pem');
+  const probeCert = resolve(certsDir, '.probe-cert.pem');
   for (const bin of opensslCandidates()) {
     try {
-      const r = spawnSync(bin, ['version'], { stdio: 'ignore' });
-      if (r.status === 0) return bin;
+      // Não basta `version`: sondamos gerando um certificado de teste, porque
+      // alguns OpenSSL falham só na hora de emitir (config ausente).
+      const r = spawnSync(bin, [
+        'req', '-x509', '-newkey', 'rsa:2048', '-nodes',
+        '-subj', '/CN=ps1emu-probe', '-days', '1',
+        '-keyout', probeKey, '-out', probeCert
+      ], { stdio: 'ignore' });
+      if (r.status === 0) {
+        try { rmSync(probeKey, { force: true }); rmSync(probeCert, { force: true }); } catch { /* ok */ }
+        return bin;
+      }
     } catch {
       /* tenta o próximo */
     }
@@ -59,7 +73,10 @@ function localIPs() {
   const ips = new Set(['127.0.0.1']);
   for (const list of Object.values(networkInterfaces())) {
     for (const it of list || []) {
-      if (it.family === 'IPv4' && !it.internal) ips.add(it.IPAddress);
+      // Node moderno expõe `address` (o antigo `IPAddress` virou undefined e o
+      // certificado saía SEM o IP da LAN -> https://SEU-IP:3443 dava erro de nome).
+      const ip = it.address || it.IPAddress;
+      if (it.family === 'IPv4' && !it.internal && ip) ips.add(ip);
     }
   }
   return [...ips];
@@ -103,7 +120,20 @@ try {
   process.exit(1);
 }
 
-const lanIP = ips.find((ip) => ip !== '127.0.0.1') || 'SEU-IP';
+const lanIP =
+  ips
+    .filter((ip) => ip !== '127.0.0.1')
+    .sort((a, b) => rankIP(a) - rankIP(b))[0] || 'SEU-IP';
+
+// Prefere a rede real (192.168/10/172.16-31) e evita faixas de adaptadores de
+// VM/VPN (VirtualBox 192.168.56/99, libvirt 192.168.122, Docker 172.17/10.0.2…).
+function rankIP(ip) {
+  if (/^(192\.168\.(56|99|122|64)\.|172\.17\.|10\.0\.2\.|10\.211\.55\.|10\.37\.129\.)/.test(ip)) return 9;
+  if (/^192\.168\./.test(ip)) return 0;
+  if (/^10\./.test(ip)) return 1;
+  if (/^172\.(1[6-9]|2\d|3[01])\./.test(ip)) return 2;
+  return 3;
+}
 
 console.log('\n[CERT] OK! Certificado criado em:');
 console.log('  ' + keyPath);
