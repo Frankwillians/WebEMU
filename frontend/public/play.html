@@ -496,6 +496,7 @@
     <section class="card" id="card-links">
       <h2><span class="ico">🔗</span> Links salvos</h2>
       <p class="hint">Todo jogo aberto por <strong>link</strong> é catalogado aqui automaticamente — separado por console, com capa — e fica disponível para jogar de novo quando quiser.</p>
+      <p class="hint">A capa segue o <b>nome + console</b>: o <b>✏️</b> renomeia (e a capa se refaz) e o <b>🖼</b> aponta uma capa por URL, quando a busca não acertar.</p>
       <p class="hint">Use <b>⬇️ Exportar backup</b> para levar a coleção (de <b>todos os consoles</b>) a outro aparelho e <b>⬆️ Importar backup</b> para restaurá-la.</p>
       <div class="row" style="margin:6px 0">
         <button id="btn-links-export" class="btn sm" type="button" title="Baixar um arquivo com a coleção de TODOS os consoles">⬇️ Exportar backup</button>
@@ -1166,17 +1167,25 @@
     });
   }
 
-  // URL da capa (proxy do servidor, que busca no libretro-thumbnails).
-  // No Vercel (HTTPS) com backend local (HTTP), usa proxy Vercel para evitar Mixed Content.
-  function coverUrlByName(sys, name) {
-    var base = String(name || '').replace(/\.[^.]+$/, '');
+  // Endpoint de capa deste console (no Vercel com backend local usa o proxy
+  // /api/cover para escapar do Mixed Content).
+  function coverEndpoint(sys, query) {
     var localBase = getApiBase();
     var needsProxy = location.protocol === 'https:' && /^http:/i.test(localBase);
-    if (needsProxy) {
-      // Proxy no Vercel: /api/cover?system=...&name=...
-      return '/api/cover?system=' + encodeURIComponent(sys.id) + '&name=' + encodeURIComponent(base);
-    }
-    return localBase + '/api/systems/' + encodeURIComponent(sys.id) + '/cover?name=' + encodeURIComponent(base);
+    if (needsProxy) return '/api/cover?system=' + encodeURIComponent(sys.id) + '&' + query;
+    return localBase + '/api/systems/' + encodeURIComponent(sys.id) + '/cover?' + query;
+  }
+  // Capa pelo nome do jogo: o servidor tenta o nome exato e, se não achar, uma
+  // busca aproximada dentro do catálogo daquele console.
+  function coverUrlByName(sys, name) {
+    var base = String(name || '').replace(/\.[^.]+$/, '');
+    return coverEndpoint(sys, 'name=' + encodeURIComponent(base));
+  }
+  // Capa apontada pelo usuário (URL manual). `data:` vai direto; o resto passa
+  // pelo proxy do servidor para funcionar sob COEP.
+  function coverUrlManual(sys, url) {
+    if (/^data:/i.test(url)) return url;
+    return coverEndpoint(sys, 'url=' + encodeURIComponent(url));
   }
 
   // Cartão de jogo com capa + ações.
@@ -1345,6 +1354,21 @@
     renderLinks(sys);
   }
 
+  // Define (ou limpa) a capa manual de um link. Vazio volta a buscar pelo
+  // nome + console.
+  function setLinkCover(sys, url) {
+    var arr = getLinks(sys.id);
+    var found = null;
+    for (var i = 0; i < arr.length; i++) { if (arr[i].url === url) { found = arr[i]; break; } }
+    if (!found) return;
+    var novo = window.prompt('URL da imagem de capa (deixe vazio para buscar pelo nome):', found.cover || '');
+    if (novo === null) return;
+    novo = novo.trim();
+    if (novo) found.cover = novo; else delete found.cover;
+    setLinks(sys.id, arr);
+    renderLinks(sys);
+  }
+
   // Cartão de um link salvo: capa + nome + host + ações (jogar/renomear/remover).
   function linkCard(sys, link) {
     var card = document.createElement('div');
@@ -1366,7 +1390,8 @@
     img.crossOrigin = 'anonymous';
     img.onerror = function () { img.remove(); };
     img.onload = function () { img.classList.add('loaded'); };
-    img.src = coverUrlByName(sys, link.name || linkName(link.url));
+    // Capa: URL manual (se houver) ou busca pelo nome no console do link.
+    img.src = link.cover ? coverUrlManual(sys, link.cover) : coverUrlByName(sys, link.name || linkName(link.url));
     cover.appendChild(fb);
     cover.appendChild(img);
     cover.appendChild(badge);
@@ -1396,6 +1421,13 @@
     ren.textContent = '✏️';
     ren.onclick = function () { renameLink(sys, link.url); };
 
+    var cap = document.createElement('button');
+    cap.type = 'button';
+    cap.className = 'btn sm';
+    cap.title = 'Capa (URL manual)';
+    cap.textContent = '🖼';
+    cap.onclick = function () { setLinkCover(sys, link.url); };
+
     var del = document.createElement('button');
     del.type = 'button';
     del.className = 'btn sm';
@@ -1405,6 +1437,7 @@
 
     actions.appendChild(play);
     actions.appendChild(ren);
+    actions.appendChild(cap);
     actions.appendChild(del);
     body.appendChild(name);
     body.appendChild(meta);
@@ -1468,7 +1501,9 @@
         arr.forEach(function (l) {
           if (!l || !l.url) return;
           if (cur.some(function (x) { return x && x.url === l.url; })) return;   // não duplica
-          cur.push({ url: l.url, name: l.name || linkName(l.url), addedAt: l.addedAt || Date.now(), lastPlayed: l.lastPlayed || 0 });
+          var item = { url: l.url, name: l.name || linkName(l.url), addedAt: l.addedAt || Date.now(), lastPlayed: l.lastPlayed || 0 };
+          if (l.cover) item.cover = String(l.cover);
+          cur.push(item);
           added++;
         });
         if (cur.length > 100) cur = cur.slice(0, 100);

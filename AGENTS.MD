@@ -109,6 +109,7 @@ ps1emu/
 │   ├── server.js          HTTP + API REST + estáticos + wiring do signaling
 │   ├── signaling.js       WebSocket de sinalização + lobby (salas/senha/chat/kick)
 │   ├── systems.js         Catálogo dos 29 consoles (id, nome, cores, extensões)
+│   ├── covers.js          Capas: nome→imagem no libretro-thumbnails (exata/aproximada)
 │   ├── storage.js         Indexação de ROMs do disco (PS1, PS2, por sistema)
 │   ├── bios.js            Upload/armazenamento de BIOS
 │   ├── settings.js        Config persistente (ps1emu.config.json)
@@ -257,7 +258,8 @@ Mídia e inputs:    WebRTC (P2P) — o HOST emula e transmite; convidados só ma
 | GET | `/api/systems/:id/games` | Jogos do console (indexado do disco) |
 | POST | `/api/systems/:id/rescan` | Reindexa a pasta do console |
 | POST | `/api/systems/:id/m3u` | Cria playlist `.m3u` (multi-disco) a partir de `{ name, gameIds }` |
-| GET | `/api/systems/:id/cover?name=` | Capa do jogo (proxy com cache) |
+| GET | `/api/systems/:id/cover?name=` | Capa do jogo (exata + aproximada no console, com cache) |
+| GET | `/api/systems/:id/cover?url=` | Capa manual (proxy da imagem apontada) |
 | POST | `/api/systems/:id/launch` | Abre no RetroArch do PC |
 | GET | `/roms/:systemId/*` | Arquivos do console (Range) |
 | GET | `/api/rom?url=` | Proxy de ROM por URL (CORS + Range) |
@@ -295,13 +297,18 @@ Mídia e inputs:    WebRTC (P2P) — o HOST emula e transmite; convidados só ma
   `np_gamepad_idx`, `np_session_token`).
 - **Coleção de links salvos:** todo jogo aberto por URL é catalogado por console
   em `localStorage['ps1emu.links']` (`{ [systemId]: [{ url, name, addedAt,
-  lastPlayed }] }`). `saveLink` é idempotente por URL (rejogar não duplica) e
-  `renderLinks`/`linkCard` desenham a grade (capa via `coverUrlByName`);
-  `playSavedLink` reusa `playByUrl`. Fica no cartão **🔗 Links salvos** de cada
-  console, com renomear (✏️) e remover (🗑); esses jogos **somam** na contagem do
-  console (`linksCount`/`sysCard`/`games-count`). No mesmo cartão,
-  `exportLinksBackup` baixa um JSON com a coleção de **todos os consoles** e
+  lastPlayed, cover? }] }`). `saveLink` é idempotente por URL (rejogar não
+  duplica) e `renderLinks`/`linkCard` desenham a grade; `playSavedLink` reusa
+  `playByUrl`. Fica no cartão **🔗 Links salvos** de cada console, com renomear
+  (✏️), capa (🖼) e remover (🗑); esses jogos **somam** na contagem do console
+  (`linksCount`/`sysCard`/`games-count`). No mesmo cartão, `exportLinksBackup`
+  baixa um JSON com a coleção de **todos os consoles** (incluindo `cover`) e
   `importLinksBackup` restaura (mescla sem duplicar, teto de 100 por console).
+- **Capa dos links:** `linkCard` pede a capa por `coverUrlByName(sys, nome)` — o
+  backend (`covers.js`) tenta o nome exato no libretro-thumbnails e, se não
+  achar, uma busca **aproximada** dentro daquele console; renomear refaz a capa.
+  Se o nome ainda errar, `link.cover` guarda uma **URL manual** (o 🖼), servida
+  pelo mesmo endpoint (`?url=`, via `coverUrlManual`) para funcionar sob COEP.
 - Ao mexer em UI, **valide o balanceamento de tags** (ver §11).
 
 ### Estilo geral

@@ -84,14 +84,21 @@ Range: bytes=0-          # opcional (retomada/seek)
 > **Coleção de links salvos.** Todo jogo aberto por link é catalogado
 > automaticamente **por console** em `localStorage` (`ps1emu.links`), com capa e
 > nome. Ele reaparece no cartão **🔗 Links salvos** daquele console — dá para
-> rejogar (▶), renomear (✏️) ou remover (🗑) a qualquer momento. Rejogar o mesmo
-> link **não** duplica (a chave é a própria URL), e cada navegador guarda a sua
-> coleção (nada vai para o servidor). Esses jogos **contam** na quantidade de
-> jogos do console.
+> rejogar (▶), renomear (✏️), trocar a capa (🖼) ou remover (🗑) a qualquer
+> momento. Rejogar o mesmo link **não** duplica (a chave é a própria URL), e cada
+> navegador guarda a sua coleção (nada vai para o servidor). Esses jogos
+> **contam** na quantidade de jogos do console.
+>
+> **A capa segue o nome + console.** O backend resolve o nome no catálogo
+> libretro-thumbnails daquele console: primeiro tenta o nome **exato** e, se não
+> achar, uma busca **aproximada** (ignora região/tags como `(USA)`, `(Rev 1)`,
+> `[T+Pt]` e a extensão). Renomear o link refaz a capa; se ainda assim não for a
+> certa, o **🖼** grava uma **URL de capa manual**.
 >
 > **Backup da coleção.** Ainda no cartão **🔗 Links salvos**, **⬇️ Exportar
-> backup** baixa um JSON com a coleção de **todos os consoles**; **⬆️ Importar
-> backup** restaura esse arquivo em outro aparelho (mescla e não duplica).
+> backup** baixa um JSON com a coleção de **todos os consoles** (inclusive as
+> capas manuais); **⬆️ Importar backup** restaura esse arquivo em outro aparelho
+> (mescla e não duplica).
 
 
 ### ▲ Deploy na Vercel
@@ -429,7 +436,8 @@ core lê a lista (o `.m3u` referencia os discos por caminho relativo).
 | GET    | `/api/systems/:id/games`             | Lista os jogos do console (indexado do disco)        |
 | POST   | `/api/systems/:id/rescan`            | Reindexa a pasta do console                          |
 | POST   | `/api/systems/:id/m3u`               | **Cria playlist `.m3u`** (multi-disco) a partir de `gameIds` |
-| GET    | `/api/systems/:id/cover?name=<nome>` | **Capa do jogo** (proxy do libretro-thumbnails, com cache) |
+| GET    | `/api/systems/:id/cover?name=<nome>` | **Capa do jogo** — busca no libretro-thumbnails (exata e, se preciso, aproximada no console), com cache |
+| GET    | `/api/systems/:id/cover?url=<img>`   | **Capa manual** — faz o proxy da imagem apontada (mesma guarda anti-SSRF do proxy de ROM) |
 | GET    | `/roms/:systemId/...`                | Arquivos do console (com Range)                      |
 | POST   | `/api/systems/:id/launch`            | Abre o jogo no RetroArch do PC (modo “PC servidor”)  |
 | GET    | `/api/netplay/ice`                   | Servidores ICE (STUN/TURN) que o netplay usa (STUN + TURN público por padrão) |
@@ -438,6 +446,10 @@ core lê a lista (o `.m3u` referencia os discos por caminho relativo).
 
 > As capas vêm do projeto **libretro-thumbnails** (No-Intro, por nome do
 > arquivo) e são servidas pelo backend — o cliente não precisa acessar o GitHub.
+> O casamento é por prioridade: **exato** primeiro e, se não houver, uma busca
+> **aproximada** dentro daquele console (índice do `thumbnails.libretro.com`,
+> cacheado em memória), respeitando a região do nome quando ele já traz uma. Uma
+> capa apontada manualmente (`?url=`) passa pelo mesmo proxy.
 
 ---
 

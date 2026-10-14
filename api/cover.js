@@ -5,18 +5,21 @@
  * No Vercel, fazemos proxy para evitar Mixed Content (HTTPS frontend → HTTP backend).
  *
  * Uso: GET /api/cover?system=ps1&name=Final%20Fantasy%20VII
+ *      GET /api/cover?system=ps1&url=https://exemplo/capa.png  (capa manual)
  */
 
 export default async function handler(req, res) {
   const system = (req.query && req.query.system) ? String(req.query.system).trim() : '';
   const name = (req.query && req.query.name) ? String(req.query.name).trim() : '';
+  const url = (req.query && req.query.url) ? String(req.query.url).trim() : '';
 
-  if (!system || !name) {
-    return res.status(400).json({ error: 'Parâmetros "system" e "name" obrigatórios' });
+  if (!system || (!name && !url)) {
+    return res.status(400).json({ error: 'Parâmetros "system" e ("name" ou "url") obrigatórios' });
   }
 
   const apiBase = process.env.LOCAL_API_BASE || 'http://192.168.1.5:3999';
-  const target = `${apiBase}/api/systems/${encodeURIComponent(system)}/cover?name=${encodeURIComponent(name)}`;
+  const query = url ? 'url=' + encodeURIComponent(url) : 'name=' + encodeURIComponent(name);
+  const target = `${apiBase}/api/systems/${encodeURIComponent(system)}/cover?${query}`;
 
   try {
     const img = await fetch(target, {

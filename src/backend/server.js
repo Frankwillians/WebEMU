@@ -65,6 +65,12 @@ import {
   findRetroCore,
   boxartRepos
 } from './systems.js';
+import {
+  resolveCoverUrl,
+  getCachedCoverUrl,
+  setCachedCoverUrl,
+  hasCachedCoverUrl
+} from './covers.js';
 import { Readable } from 'stream';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -759,70 +765,69 @@ app.post('/api/systems/:id/launch', async (req, res) => {
 });
 
 // ==================== CAPAS DOS JOGOS (box art) ====================
-// Busca a capa no projeto libretro-thumbnails (GitHub) e faz proxy da imagem.
-// Assim as capas aparecem no navegador mesmo quando o aparelho não acessa o
-// GitHub diretamente. O "de-para" nome→URL fica em cache na memória.
+// O nome do jogo vira a imagem no libretro-thumbnails (casamento exato e, se
+// preciso, aproximado dentro do console) em `covers.js`. Aqui só fazemos o
+// proxy da imagem — para o navegador, inclusive quando o aparelho não acessa o
+// GitHub e quando a capa foi apontada por uma URL manual.
 
-const COVER_FOLDERS = ['Named_Boxarts', 'Named_Snaps', 'Named_Titles'];
-const COVER_BASE = 'https://raw.githubusercontent.com/libretro-thumbnails';
-const coverUrlCache = new Map(); // "systemId|nome" → URL da capa | null
-
-/** Normaliza o nome no estilo libretro-thumbnails (sanitiza caracteres proibidos). */
-function normalizeCoverName(name) {
-  return String(name)
-    .replace(/\.[a-z0-9]{1,4}$/i, '')   // remove extensão, se houver
-    .replace(/[&*/:`<>?\\|]/g, '_');    // caracteres trocados por "_" no libretro
+/** Envia uma imagem de capa já buscada, com cache e cabeçalhos amigáveis ao COEP. */
+function streamCover(img, res) {
+  res.setHeader('Cache-Control', 'public, max-age=1209600'); // 14 dias
+  res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Content-Type', img.headers.get('content-type') || 'image/png');
+  const len = img.headers.get('content-length');
+  if (len) res.setHeader('Content-Length', len);
+  Readable.fromWeb(img.body).pipe(res);
 }
 
-/** Testa (HEAD) os candidatos e devolve a URL da primeira capa existente, ou null. */
-async function resolveCoverUrl(repos, rawName) {
-  const norm = normalizeCoverName(rawName);
-  const variants = norm && norm !== rawName ? [norm, rawName] : [norm];
-  for (const repo of repos) {
-    for (const folder of COVER_FOLDERS) {
-      for (const variant of variants) {
-        if (!variant) continue;
-        const url = `${COVER_BASE}/${repo}/master/${folder}/${encodeURIComponent(variant)}.png`;
-        try {
-          const r = await fetch(url, { method: 'HEAD' });
-          if (r.ok) return url;
-        } catch {
-          // ignora e tenta o próximo candidato
-        }
-      }
-    }
+/** Busca uma imagem apontada manualmente, reusando a guarda de SSRF do proxy. */
+async function fetchManualCover(raw) {
+  let url;
+  try { url = new URL(raw); } catch { return null; }
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') return null;
+  if (isBlockedProxyHost(url.hostname)) return null;
+  try {
+    const r = await fetch(url.href, { headers: { 'User-Agent': 'ps1emu/1.0' } });
+    return r.ok ? r : null;
+  } catch {
+    return null;
   }
-  return null;
 }
 
-// Capa de um jogo (proxy com cache). Ex.: /api/systems/snes/cover?name=Super%20Mario%20World%20(USA)
+// Capa de um jogo. Por nome (busca exata/aproximada) ou por URL manual:
+//   /api/systems/snes/cover?name=Super%20Mario%20World
+//   /api/systems/snes/cover?url=https://exemplo/capa.png
 app.get('/api/systems/:id/cover', async (req, res) => {
   const system = getSystem(req.params.id);
   if (!system) return res.status(404).end();
+
+  const manual = String(req.query.url || '').trim();
+  if (manual) {
+    const img = await fetchManualCover(manual);
+    if (!img || !img.body) return res.status(404).end();
+    return streamCover(img, res);
+  }
+
   const repos = boxartRepos(system.id);
   if (!repos.length) return res.status(404).end();
 
   const name = String(req.query.name || '').trim();
   if (!name) return res.status(400).end();
 
-  const key = system.id + '|' + name.toLowerCase();
   let url;
-  if (coverUrlCache.has(key)) {
-    url = coverUrlCache.get(key);
+  if (hasCachedCoverUrl(system.id, name)) {
+    url = getCachedCoverUrl(system.id, name);
   } else {
     url = await resolveCoverUrl(repos, name);
-    coverUrlCache.set(key, url);
+    setCachedCoverUrl(system.id, name, url);
   }
   if (!url) return res.status(404).end();
 
-  res.setHeader('Cache-Control', 'public, max-age=1209600'); // 14 dias
   try {
     const img = await fetch(url);
     if (!img.ok || !img.body) return res.status(502).end();
-    res.setHeader('Content-Type', img.headers.get('content-type') || 'image/png');
-    const len = img.headers.get('content-length');
-    if (len) res.setHeader('Content-Length', len);
-    Readable.fromWeb(img.body).pipe(res);
+    streamCover(img, res);
   } catch (error) {
     console.error('[COVER] Erro ao buscar capa:', error.message);
     if (!res.headersSent) res.status(502).end();
