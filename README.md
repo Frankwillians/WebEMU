@@ -322,7 +322,19 @@ frontend **reconecta sozinho** e volta para a mesma sala.
 ### 🌍 Alternativa: jogar pela internet com túnel público
 
 Se quiser levar também a **biblioteca de ROMs do seu PC** (em vez de só o
-netplay), exponha o servidor local por um túnel HTTPS/WSS (sem deploy):
+netplay), exponha o servidor local por um túnel HTTPS/WSS (sem deploy).
+
+**Pelo próprio site (mais fácil):** no painel **🌐 Servidor**, clique em
+**🌍 Criar túnel público**. Ele sobe o `cloudflared` (quick tunnel, sem conta) e
+mostra um endereço `https://…trycloudflare.com` — use **🔗 Copiar endereço** e
+mande para os amigos. O endereço público passa a ser usado no **link de convite**
+quando você está vendo em `localhost`. O botão **⏹️ Parar túnel** encerra.
+
+> Requer o `cloudflared` no PATH: `winget install --id Cloudflare.cloudflared`.
+> (Se estiver em outro lugar, aponte `CLOUDFLARED_BIN` para o executável. Sem
+> `cloudflared`, o backend também aceita `ngrok`.)
+
+**Manualmente** (se preferir):
 
 ```powershell
 # instale o cloudflared (uma vez)
@@ -343,6 +355,10 @@ $env:PUBLIC_URL="https://algo-aleatorio.trycloudflare.com"; npm start
 ```
 
 Aí o botão **🔗 Copiar link** gera `https://…/play.html?room=CÓDIGO`.
+
+> ⚠️ Enquanto o túnel está ligado, **este PC fica acessível na internet**
+> (jogos, API e netplay). Use só quando precisar e, de preferência, defina
+> `ACCESS_TOKEN`.
 
 > Alternativas de túnel: `ngrok http 3000`, `localtunnel` ou **Tailscale Funnel**
 > (endereço fixo). Para algo sempre no ar, faça deploy do backend inteiro num
@@ -613,7 +629,8 @@ engrenagem). Gamepads USB/Bluetooth funcionam automaticamente (Gamepad API).
 | Variável | Efeito |
 |----------|--------|
 | `TURN_URLS`, `TURN_USERNAME`, `TURN_CREDENTIAL` | TURN próprio para o WebRTC (padrão: TURN público gratuito) |
-| `PUBLIC_URL` | URL pública usada nos links de convite |
+| `PUBLIC_URL` | URL pública usada nos links de convite (túnel externo já configurado) |
+| `CLOUDFLARED_BIN`, `NGROK_BIN` | Caminho do binário do túnel, se estiver fora do PATH |
 | `ACCESS_TOKEN` | Token opcional para proteger a API e o sinalizador |
 | `NETPLAY_WS=0` | **Desliga** a opção 🌐 Online na Vercel |
 

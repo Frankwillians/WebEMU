@@ -190,7 +190,8 @@ Do netplay/túnel:
 | Variável | Efeito |
 |----------|--------|
 | `TURN_URLS`, `TURN_USERNAME`, `TURN_CREDENTIAL` | TURN próprio p/ WebRTC (padrão: TURN público gratuito) |
-| `PUBLIC_URL` | URL pública usada nos **links de convite** |
+| `PUBLIC_URL` | URL pública usada nos **links de convite** (túnel externo já configurado) |
+| `CLOUDFLARED_BIN`, `NGROK_BIN` | Caminho do binário do túnel, se estiver **fora do PATH** (default: `cloudflared`/`ngrok`) |
 | `ACCESS_TOKEN` | Token opcional p/ proteger a API e o sinalizador |
 | `NETPLAY_WS=0` | **Desliga** a opção 🌐 Online (Vercel) |
 | `LOCAL_API_BASE` | Base local usada pelo `api/cover.js` (default `http://192.168.1.5:3999`) |
@@ -264,6 +265,8 @@ Mídia e inputs:    WebRTC (P2P) — o HOST emula e transmite; convidados só ma
 | GET | `/api/discover` | Varre a rede local e lista outros WebEMU |
 | GET | `/api/shares` | Pastas compartilhadas na rede |
 | GET | `/api/netplay/ice` | Servidores ICE (STUN/TURN) |
+| GET | `/api/tunnel` | Estado do **túnel público** (status, url, disponível, binário sugerido) |
+| POST | `/api/tunnel/start` · `/api/tunnel/stop` | Cria/encerra o túnel (`cloudflared`/`ngrok`) na internet |
 | GET | `/api/bios` · POST/DELETE `/api/bios` | Gestão de BIOS |
 | GET/POST | `/api/config` | Lê/grava pastas (grava em `ps1emu.config.json`) |
 | GET | `/api/ps2/games` · POST `/api/ps2/rescan` | Biblioteca de PS2 |
@@ -374,8 +377,10 @@ Mensagens do sinalizador (`src/backend/signaling.js`): `join`, `leave`, `offer`,
     oferta (`npHostOnSyncRequest`) — sem precisar sair/entrar da sala. O host não
     cria ofertas concorrentes (`npHostCreateOffer(force)`).
 
-Painéis da UI: **🌐 Servidor** = só rede local (achar PC/pastas compartilhadas);
-**👥 Jogar em rede** = criar sala / netplay. Não misture as responsabilidades.
+Painéis da UI: **🌐 Servidor** = alcançar o servidor (achar PCs/pastas na **LAN**
+e, quando precisar, expor este PC pela internet com o **túnel público**);
+**👥 Jogar em rede** = criar sala / netplay. Não misture as responsabilidades
+(não crie sala no painel Servidor).
 
 ---
 
@@ -480,6 +485,8 @@ resultado **verificável** (teste/validação) antes de considerar pronto.
 | 404 na Vercel em rotas multi-segmento | Smart-join de `req.query['...all']` em `api/[...all].js` |
 | Capa/ROM bloqueada no Vercel | Mixed Content: use `/api/cover`, `/api/rom` (`precisaProxy()`) |
 | Conectar do site HTTPS ao PC da LAN | **Mixed Content** (bloqueio do navegador, não é header). Abra `http://IP:3000/play.html` ou o **HTTPS** do PC (`npm run cert` → `https://IP:3443`, aceite o certificado); o preflight **PNA** já é respondido. Sem `certs/`, `lanHttpsUrl` é `null` |
+| Jogar com quem está em **outra rede** | Painel 🌐 Servidor → **🌍 Criar túnel público** (`cloudflared`/`ngrok`, sem conta); ou **👥 Jogar em rede** no modo 🌐 Online. O túnel vira o link de convite quando o host está em `localhost` |
+| Túnel "unavailable" / não sobe | Instale o `cloudflared` (`winget install --id Cloudflare.cloudflared`) ou aponte `CLOUDFLARED_BIN`/`NGROK_BIN` para o binário. O túnel expõe o PC na internet — considere `ACCESS_TOKEN` |
 | "Conectado a https://web-emu.vercel.app" ao digitar um IP | `getApiBase` lendo a base com `JSON.parse` (gravada crua) — leia string crua; `normalizarBase` |
 | Não acha servidores na rede | Base da API errada (vira o site) ou página HTTPS varrendo a nuvem; conecte antes ao PC (`http://IP:3000`) |
 | Busca de servidores muito lenta | Scan varrendo sub-redes virtuais; pular faixas de VM e limitar por orçamento/concorrência |
