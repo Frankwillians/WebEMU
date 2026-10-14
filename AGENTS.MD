@@ -57,8 +57,8 @@ duas soluções, escolha a que respeita estes princípios.
 **WebEMU** é uma **Central de Emulação** multi-console que roda **no navegador**
 (WASM via [EmulatorJS](https://emulatorjs.org)) e também pode delegar ao
 **RetroArch nativo** do "PC servidor". Uma única página (`/play.html`) traz
-**seletor de console**, **biblioteca com capas**, **busca por nome**, descoberta
-de **servidores na rede local** e **netplay (LAN e internet)**.
+**seletor de console**, **biblioteca com capas**, **busca por nome**, **coleção
+de links salvos** (com backup) e **netplay (LAN e internet)**.
 
 Consoles configurados (29) — definidos em `src/backend/systems.js`:
 
@@ -185,13 +185,12 @@ Definidas em `src/backend/config.js` (lidas do ambiente / `.env`):
 | `CORS_ORIGIN` | `*` | Origens permitidas |
 | `LOG_LEVEL` | `info` | `info` \| `debug` |
 
-Do netplay/túnel:
+Do netplay:
 
 | Variável | Efeito |
 |----------|--------|
 | `TURN_URLS`, `TURN_USERNAME`, `TURN_CREDENTIAL` | TURN próprio p/ WebRTC (padrão: TURN público gratuito) |
-| `PUBLIC_URL` | URL pública usada nos **links de convite** (túnel externo já configurado) |
-| `CLOUDFLARED_BIN`, `NGROK_BIN` | Caminho do binário do túnel, se estiver **fora do PATH** (default: `cloudflared`/`ngrok`) |
+| `PUBLIC_URL` | URL pública (ex.: túnel HTTPS que você subiu) usada nos **links de convite** |
 | `ACCESS_TOKEN` | Token opcional p/ proteger a API e o sinalizador |
 | `NETPLAY_WS=0` | **Desliga** a opção 🌐 Online (Vercel) |
 | `LOCAL_API_BASE` | Base local usada pelo `api/cover.js` (default `http://192.168.1.5:3999`) |
@@ -262,11 +261,7 @@ Mídia e inputs:    WebRTC (P2P) — o HOST emula e transmite; convidados só ma
 | POST | `/api/systems/:id/launch` | Abre no RetroArch do PC |
 | GET | `/roms/:systemId/*` | Arquivos do console (Range) |
 | GET | `/api/rom?url=` | Proxy de ROM por URL (CORS + Range) |
-| GET | `/api/discover` | Varre a rede local e lista outros WebEMU |
-| GET | `/api/shares` | Pastas compartilhadas na rede |
 | GET | `/api/netplay/ice` | Servidores ICE (STUN/TURN) |
-| GET | `/api/tunnel` | Estado do **túnel público** (status, url, disponível, binário sugerido) |
-| POST | `/api/tunnel/start` · `/api/tunnel/stop` | Cria/encerra o túnel (`cloudflared`/`ngrok`) na internet |
 | GET | `/api/bios` · POST/DELETE `/api/bios` | Gestão de BIOS |
 | GET/POST | `/api/config` | Lê/grava pastas (grava em `ps1emu.config.json`) |
 | GET | `/api/ps2/games` · POST `/api/ps2/rescan` | Biblioteca de PS2 |
@@ -303,7 +298,10 @@ Mídia e inputs:    WebRTC (P2P) — o HOST emula e transmite; convidados só ma
   lastPlayed }] }`). `saveLink` é idempotente por URL (rejogar não duplica) e
   `renderLinks`/`linkCard` desenham a grade (capa via `coverUrlByName`);
   `playSavedLink` reusa `playByUrl`. Fica no cartão **🔗 Links salvos** de cada
-  console, com renomear (✏️) e remover (🗑).
+  console, com renomear (✏️) e remover (🗑); esses jogos **somam** na contagem do
+  console (`linksCount`/`sysCard`/`games-count`). No mesmo cartão,
+  `exportLinksBackup` baixa um JSON com a coleção de **todos os consoles** e
+  `importLinksBackup` restaura (mescla sem duplicar, teto de 100 por console).
 - Ao mexer em UI, **valide o balanceamento de tags** (ver §11).
 
 ### Estilo geral
@@ -355,13 +353,13 @@ Mensagens do sinalizador (`src/backend/signaling.js`): `join`, `leave`, `offer`,
     passam por proxy (`/api/rom`, `/api/cover`). Use `precisaProxy()`
     (`location.protocol === 'https:' && /^http:/i.test(getApiBase())`).
     Uma página HTTPS **não** consegue falar direto com API HTTP da LAN
-    (`/api/health`, `/api/discover`, `/api/systems`): o navegador bloqueia. Para
+    (`/api/health`, `/api/systems`): o navegador bloqueia. Para
     jogar pelos arquivos do PC, abra o próprio `http://IP:3000/play.html`.
     **Ponte HTTPS↔HTTP (caminhos válidos):** (a) abrir a própria página do PC
     (same-origin); (b) o PC servir **HTTPS** — `npm run cert` gera `certs/` com
     **o IP da LAN no SAN** (senão dá erro de nome) e o servidor sobe `:3443`;
     aí é HTTPS→HTTPS (aceite o certificado autoassinado) — `/api/health`
-    devolve `lanHttpsUrl` e a UI mostra o atalho; (c) túnel HTTPS
+    devolve `lanHttpsUrl` (para uso em `?server=`); (c) túnel HTTPS
     (`cloudflared`/`ngrok`/Tailscale) — `PUBLIC_URL` nos links de convite;
     (d) `http://localhost:3000` na mesma máquina (isento de Mixed Content).
     Navegador **público→privado** (Vercel→LAN) também exige responder o
@@ -385,10 +383,10 @@ Mensagens do sinalizador (`src/backend/signaling.js`): `join`, `leave`, `offer`,
     oferta (`npHostOnSyncRequest`) — sem precisar sair/entrar da sala. O host não
     cria ofertas concorrentes (`npHostCreateOffer(force)`).
 
-Painéis da UI: **🌐 Servidor** = alcançar o servidor (achar PCs/pastas na **LAN**
-e, quando precisar, expor este PC pela internet com o **túnel público**);
-**👥 Jogar em rede** = criar sala / netplay. Não misture as responsabilidades
-(não crie sala no painel Servidor).
+Painéis da UI: **👥 Jogar em rede** = criar sala / netplay. Não há mais painel de
+servidor: para usar os jogos de outra máquina, aponte a base com o parâmetro
+**`?server=`** (`localStorage['ps1emu.apiBase']`, string crua). Um túnel HTTPS é
+responsabilidade do usuário (`PUBLIC_URL` nos links de convite).
 
 ---
 
@@ -492,12 +490,9 @@ resultado **verificável** (teste/validação) antes de considerar pronto.
 | PSP/DOS não iniciam no celular | Falta contexto seguro + COOP/COEP (`npm run cert`, HTTPS) |
 | 404 na Vercel em rotas multi-segmento | Smart-join de `req.query['...all']` em `api/[...all].js` |
 | Capa/ROM bloqueada no Vercel | Mixed Content: use `/api/cover`, `/api/rom` (`precisaProxy()`) |
-| Conectar do site HTTPS ao PC da LAN | **Mixed Content** (bloqueio do navegador, não é header). Abra `http://IP:3000/play.html` ou o **HTTPS** do PC (`npm run cert` → `https://IP:3443`, aceite o certificado); o preflight **PNA** já é respondido. Sem `certs/`, `lanHttpsUrl` é `null` |
-| Jogar com quem está em **outra rede** | Painel 🌐 Servidor → **🌍 Criar túnel público** (`cloudflared`/`ngrok`, sem conta); ou **👥 Jogar em rede** no modo 🌐 Online. O túnel vira o link de convite quando o host está em `localhost` |
-| Túnel "unavailable" / não sobe | Instale o `cloudflared` (`winget install --id Cloudflare.cloudflared`) ou aponte `CLOUDFLARED_BIN`/`NGROK_BIN` para o binário. O túnel expõe o PC na internet — considere `ACCESS_TOKEN` |
-| "Conectado a https://web-emu.vercel.app" ao digitar um IP | `getApiBase` lendo a base com `JSON.parse` (gravada crua) — leia string crua; `normalizarBase` |
-| Não acha servidores na rede | Base da API errada (vira o site) ou página HTTPS varrendo a nuvem; conecte antes ao PC (`http://IP:3000`) |
-| Busca de servidores muito lenta | Scan varrendo sub-redes virtuais; pular faixas de VM e limitar por orçamento/concorrência |
+| Conectar do site HTTPS ao PC da LAN | **Mixed Content** (bloqueio do navegador, não é header). Abra `http://IP:3000/play.html`, use o **HTTPS** do PC (`npm run cert` → `https://IP:3443`, com `?server=`) ou um túnel HTTPS. O preflight **PNA** já é respondido |
+| Jogar com quem está em **outra rede** | **👥 Jogar em rede** no modo 🌐 Online (netplay); ou um túnel HTTPS que **você** sobe (`cloudflared`/`ngrok`/Tailscale) + `PUBLIC_URL` para levar a biblioteca. O túnel expõe o PC na internet — considere `ACCESS_TOKEN` |
+| "Conectado a https://web-emu.vercel.app" ao digitar um IP | `getApiBase` lendo a base com `JSON.parse` (gravada crua) — aponte com `?server=` (grava string crua); `normalizarBase` |
 | Convidado não vê, host trava | `streamVersion`/recriação de PC, `npHostRecheckStream`, `track ended` |
 | "Aguardando o host" preso | Só deve aparecer em `failed`/`closed`; limpe estado ao sair |
 | Host vê tela preta "Aguardando o host" | Palco `#np-stage` do convidado sobre o canvas; esconder no `showPlayer`/`npAssumirHost` |

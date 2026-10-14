@@ -216,13 +216,6 @@
     .toast.ok { border-color: #14532d; }
     .toast.warn { border-color: #78350f; }
 
-    /* descoberta de servidores na rede */
-    .srv-consoles { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
-    .srv-chip { font-size: 11px; padding: 3px 8px; border-radius: 999px; background: #0e1624; border: 1px solid #2b3a52; color: #b6c3da; white-space: nowrap; }
-    .srv-chip b { color: #67e8f9; }
-    .srv-item { flex-direction: column; align-items: stretch; }
-    .srv-item .top { display: flex; align-items: center; gap: 10px; }
-
     /* netplay (sala + palco do convidado) */
     .np-stage { position: absolute; inset: 0; background: #000; z-index: 6; display: block; }
     .np-stage video { width: 100%; height: 100%; object-fit: contain; background: #000; display: block; }
@@ -345,57 +338,11 @@
   </div>
   <div class="top-actions" id="top-actions">
     <span id="backend-badge" class="badge"><span class="dot"></span> Servidor…</span>
-    <button id="btn-server-toggle" class="btn sm" type="button" title="Servidores e pastas da rede"><span class="ico">🌐</span><span class="lbl">Servidor</span></button>
     <button id="btn-lobby-toggle" class="btn sm" type="button" title="Jogar em rede (netplay)"><span class="ico">👥</span><span class="lbl">Jogar em rede</span></button>
     <button id="btn-np-stream" class="btn sm hidden" type="button" title="Abrir/parar a transmissão da sala"><span class="ico">📡</span><span class="lbl">Transmissão</span></button>
     <button id="btn-home" class="btn sm hidden" type="button" title="Voltar aos consoles"><span class="ico">🏠</span><span class="lbl">Consoles</span></button>
   </div>
 </header>
-
-<!-- SERVER PANEL: somente REDE LOCAL (achar PCs e carregar os jogos deles) -->
-<section id="server-panel" class="panel hidden">
-  <p class="hint">Serve para <b>acessar os jogos de outro PC na sua rede</b> (mesmo Wi-Fi/Ethernet).
-  Para jogar com amigos em <b>outras casas</b>, use <b>👥 Jogar em rede</b>.</p>
-
-  <div class="row" style="margin-top:8px">
-    <input id="server-input" class="input" type="text" placeholder="http://192.168.0.5:3000" spellcheck="false" />
-    <button id="btn-connect" class="btn sm primary" type="button">Conectar</button>
-    <button id="btn-paste-server" class="btn sm" type="button" title="Colar da área de transferência e conectar">📋 Colar</button>
-  </div>
-  <p class="hint" id="server-status">Usando o servidor desta página.</p>
-  <p class="hint">Abrir em <b>outro aparelho</b> da mesma rede:</p>
-  <div class="row" style="margin-top:6px">
-    <button id="btn-open-http" class="btn sm" type="button" title="Abrir a página deste PC em HTTP (rede local)">🔓 Abrir em HTTP</button>
-    <button id="btn-open-https" class="btn sm" type="button" style="display:none" title="HTTPS do PC — contexto seguro p/ PSP e DOS. O navegador avisa do certificado autoassinado; é só aceitar.">🔒 Abrir em HTTPS</button>
-  </div>
-  <p class="hint" id="lan-urls" style="display:none"></p>
-
-  <div class="row" style="margin-top:12px">
-    <button id="btn-discover" class="btn sm" type="button">🔍 Buscar servidores na rede</button>
-    <span class="hint" id="discover-status" style="margin:0"></span>
-  </div>
-  <div id="discover-list" class="list"></div>
-  <p class="hint">Acha outros computadores com o WebEMU ligado na mesma rede e mostra <strong>quais consoles e quantos jogos</strong> cada um tem. Clique em <strong>Usar</strong> para jogar pelos arquivos daquele PC.</p>
-  <p class="hint">Não achou nada? Confira se os dois aparelhos estão no <b>mesmo Wi-Fi</b>, se o outro PC está com o servidor rodando e se o <b>Firewall do Windows</b> não está bloqueando.</p>
-
-  <div class="row" style="margin-top:12px">
-    <button id="btn-shares" class="btn sm" type="button">📁 Buscar pastas compartilhadas na rede</button>
-    <span class="hint" id="shares-status" style="margin:0"></span>
-  </div>
-  <div id="shares-list" class="list"></div>
-  <p class="hint">Acha as <b>pastas compartilhadas</b> do Windows na sua rede (ex.: <code>\PC-DA-CASA\Jogos</code>). Clique em <strong>Usar</strong> para indexar os jogos direto daquele PC — sem copiar nada.</p>
-
-  <div id="tunnel-block" style="display:none">
-    <p class="hint" style="margin-top:14px">Para jogar com quem está em <b>outra rede</b> (outra casa): crie um <b>túnel HTTPS</b> para este PC. Ele gera um endereço público temporário — sem conta e sem instalar nada no celular.</p>
-    <div class="row" style="margin-top:6px">
-      <button id="btn-tunnel" class="btn sm" type="button">🌍 Criar túnel público</button>
-      <button id="btn-tunnel-copy" class="btn sm" type="button" style="display:none">🔗 Copiar endereço</button>
-    </div>
-    <p class="hint" id="tunnel-status" style="margin:0"></p>
-    <p class="hint" id="tunnel-url" style="display:none"></p>
-    <p class="hint" style="opacity:.85">⚠️ Enquanto o túnel está ligado, este PC fica acessível na internet (jogos, API e netplay). Use só quando precisar; de preferência defina <code>ACCESS_TOKEN</code>. Requer o <code>cloudflared</code>: <code>winget install --id Cloudflare.cloudflared</code>.</p>
-  </div>
-</section>
 
 <!-- NETPLAY / LOBBY PANEL -->
 <section id="lobby-panel" class="panel hidden">
@@ -451,25 +398,6 @@
         <p class="hint">O vídeo/áudio/inputs continuam trafegando <b>ponto a ponto</b> (WebRTC), usando os servidores
         STUN/TURN gratuitos que o servidor já entrega — o sinalizador só faz a apresentação inicial entre os jogadores.</p>
 
-        <p class="hint"><b>Opção 2 — túnel no PC do host</b> (útil se quiser levar a biblioteca de ROMs do seu PC junto):</p>
-        <table class="hint" style="width:100%;border-collapse:collapse;margin:6px 0">
-          <tr style="color:#67e8f9"><td style="padding:3px 6px"><b>Serviço</b></td><td style="padding:3px 6px"><b>Como faz</b></td><td style="padding:3px 6px"><b>Endereço</b></td></tr>
-          <tr><td style="padding:3px 6px">⭐ <b>Cloudflare</b></td><td style="padding:3px 6px"><code>winget install Cloudflare.cloudflared</code> depois <code>cloudflared tunnel --url http://localhost:3000</code></td><td style="padding:3px 6px">HTTPS grátis, sem conta</td></tr>
-          <tr><td style="padding:3px 6px">🔒 <b>Tailscale</b></td><td style="padding:3px 6px">instala nos dois PCs, entra na mesma rede, depois <code>tailscale serve https / http://localhost:3000</code></td><td style="padding:3px 6px"><code>https://nomedopc.tailnet.ts.net</code> — <b>fixo</b></td></tr>
-          <tr><td style="padding:3px 6px">🎮 <b>Playit.gg</b></td><td style="padding:3px 6px">instala e roda um agente</td><td style="padding:3px 6px">endereço grátis próprio</td></tr>
-          <tr><td style="padding:3px 6px"><b>ngrok</b></td><td style="padding:3px 6px"><code>ngrok http 3000</code></td><td style="padding:3px 6px">HTTPS grátis (conta)</td></tr>
-        </table>
-
-        <p class="hint"><b>Passo a passo do túnel (Cloudflare):</b></p>
-        <ol class="hint" style="padding-left:18px;margin:6px 0">
-          <li>No PC com os jogos: <code>node src/backend/server.js</code></li>
-          <li>Em outra janela do PowerShell: <code>cloudflared tunnel --url http://localhost:3000</code></li>
-          <li>Ele imprime um endereço tipo <code>https://abc-123.trycloudflare.com</code></li>
-          <li>Cole esse endereço em <b>🌐 Servidor</b> → <b>Conectar</b> (ou use <b>📋 Colar</b>)</li>
-          <li>Clique em <b>🔗 Copiar link de convite</b> — o link já sai com tudo certo</li>
-        </ol>
-
-        <p class="hint">⚠️ O túnel fica ativo só enquanto o PC do host estiver ligado e o comando rodando. O endereço do Cloudflare muda a cada reinício; o do <b>Tailscale</b> é fixo.</p>
       </div>
     </details>
   </div>
@@ -790,7 +718,6 @@
   var currentSystem = null;
   var netplayAvailable = false;   // o servidor desta página tem signaling (netplay LAN)?
   var serverLanUrl = '';          // ex.: http://192.168.0.5:3000 (para montar o link da sala)
-  var serverLanHttpsUrl = '';     // ex.: https://192.168.0.5:3443 (contexto seguro p/ PSP/DOS)
   var serverPublicUrl = '';       // URL pública (túnel) configurada no backend, se houver
   var serverWsUrl = '';           // sinalizador online informado pelo backend (/api/health → ws)
 
@@ -819,23 +746,6 @@
     }
   }
 
-  // A própria página está num servidor LOCAL (LAN/localhost)? Só aí faz sentido
-  // oferecer o túnel (num site público ele já está acessível).
-  function isLocalOrigin() {
-    if (IS_FILE) return true;
-    var h = location.hostname;
-    return h === 'localhost' || h === '127.0.0.1' || h === '[::1]' ||
-      /^192\.168\./.test(h) || /^10\./.test(h) || /^172\.(1[6-9]|2\d|3[01])\./.test(h);
-  }
-
-  // Endereço sugerido em HTTPS do mesmo host (para o caso Mixed Content): troca
-  // o esquema e, se a porta for a padrão HTTP (3000), usa a padrão HTTPS (3443).
-  function httpsVariantOf(base) {    var m = /^http:\/\/([^\/:]+)(?::(\d+))?/i.exec(base || '');
-    if (!m) return '';
-    var port = (!m[2] || m[2] === '3000') ? '3443' : m[2];
-    return 'https://' + m[1] + ':' + port;
-  }
-
   function api(path, opts) {
     var url = getApiBase() + path;
     if (accessToken) url += (url.includes('?') ? '&' : '?') + 'token=' + encodeURIComponent(accessToken);
@@ -861,164 +771,17 @@
       backendOk = true;
       netplayAvailable = !!j.netplay;
       if (j.lanUrl) serverLanUrl = j.lanUrl;
-      if (j.lanHttpsUrl) serverLanHttpsUrl = j.lanHttpsUrl;
       if (j.publicUrl) serverPublicUrl = j.publicUrl;
       if (j.ws) serverWsUrl = j.ws;
       loadIceServers();
       el('backend-badge').className = 'badge ok';
       el('backend-badge').innerHTML = '<span class="dot"></span> Servidor online';
-      // Atalhos clicáveis (mesma rede) + resumo dos endereços.
-      var httpBtn = el('btn-open-http');
-      var httpsBtn = el('btn-open-https');
-      if (httpBtn) httpBtn.style.display = j.lanUrl ? '' : 'none';
-      if (httpsBtn) httpsBtn.style.display = j.lanHttpsUrl ? '' : 'none';
-      var urlsLine = el('lan-urls');
-      if (urlsLine) {
-        var urls = [];
-        if (j.lanUrl) urls.push('HTTP: ' + j.lanUrl + '/play.html');
-        if (j.lanHttpsUrl) urls.push('HTTPS: ' + j.lanHttpsUrl + '/play.html');
-        urlsLine.textContent = urls.join('  ·  ');
-        urlsLine.style.display = urls.length ? '' : 'none';
-      }
-      // O túnel só faz sentido quando ESTA página está num servidor local (LAN).
-      var tblock = el('tunnel-block');
-      if (tblock) tblock.style.display = isLocalOrigin() ? '' : 'none';
-      updateServerStatus();
-      return j;
     }).catch(function (e) {
       backendOk = false;
       el('backend-badge').className = 'badge err';
       el('backend-badge').innerHTML = '<span class="dot"></span> Servidor offline';
-      updateServerStatus();
       throw e;
     });
-  }
-
-  function updateServerStatus() {
-    var st = el('server-status');
-    if (!st) return;
-    st.innerHTML = backendOk
-      ? '<span class="ok">●</span> Conectado a <b>' + escapeHtml(serverLabel()) + '</b>'
-      : '<span class="err">●</span> Sem conexão com <b>' + escapeHtml(serverLabel()) + '</b>';
-  }
-
-  // --- Túnel público: compartilhar este PC pela internet (cloudflared/ngrok) ---
-  var tunnelUrl = '';   // endereço público atual ('' = desligado)
-  var tunnelBusy = false;
-
-  function tunnelSetStatus(html) {
-    var st = el('tunnel-status');
-    if (st) st.innerHTML = html || '';
-  }
-
-  function tunnelRender(j) {
-    var prev = tunnelUrl;
-    tunnelUrl = (j && j.url) || '';
-    var running = !!(j && j.status === 'running' && tunnelUrl);
-
-    var btn = el('btn-tunnel');
-    if (btn) { btn.textContent = running ? '⏹️ Parar túnel' : '🌍 Criar túnel público'; btn.disabled = tunnelBusy; }
-    var copy = el('btn-tunnel-copy');
-    if (copy) copy.style.display = tunnelUrl ? '' : 'none';
-    var urlLine = el('tunnel-url');
-    if (urlLine) {
-      urlLine.textContent = tunnelUrl ? ('Público: ' + tunnelUrl + '/play.html') : '';
-      urlLine.style.display = tunnelUrl ? '' : 'none';
-    }
-
-    // O endereço público vira o link de convite em modo LAN quando o host está
-    // em localhost (não alcançável pelo convidado). Ao desligar, limpamos.
-    if (tunnelUrl) serverPublicUrl = tunnelUrl;
-    else if (serverPublicUrl && serverPublicUrl === prev) serverPublicUrl = '';
-
-    if (j && j.status === 'running') {
-      tunnelSetStatus('<span class="ok">●</span> Túnel ligado' + (j.provider ? ' (' + escapeHtml(j.provider) + ')' : '') + '.');
-    } else if (j && j.status === 'starting') {
-      tunnelSetStatus('Criando túnel…');
-    } else if (j && j.status === 'error') {
-      tunnelSetStatus('<span class="err">●</span> ' + escapeHtml(j.error || 'Falha no túnel.'));
-    } else if (j && j.status === 'unavailable') {
-      tunnelSetStatus('<span class="err">●</span> ' + escapeHtml(j.error || 'Instale o cloudflared.'));
-    } else {
-      tunnelSetStatus('Túnel desligado.');
-    }
-  }
-
-  function refreshTunnel() {
-    if (!backendOk) { tunnelSetStatus('Sem conexão com o servidor.'); return; }
-    return api('/api/tunnel').then(function (r) { return r.json(); }).then(tunnelRender).catch(function () {
-      tunnelSetStatus('Não foi possível consultar o túnel.');
-    });
-  }
-
-  function toggleTunnel() {
-    if (tunnelBusy) return;
-    tunnelBusy = true;
-    var btn = el('btn-tunnel');
-    if (btn) btn.disabled = true;
-    if (tunnelUrl) {
-      tunnelSetStatus('Desligando…');
-      api('/api/tunnel/stop', { method: 'POST' }).then(function (r) { return r.json(); }).then(function () {
-        serverPublicUrl = ''; tunnelBusy = false; return refreshTunnel();
-      }).catch(function (e) { tunnelBusy = false; tunnelSetStatus('<span class="err">●</span> Erro: ' + escapeHtml(e.message)); });
-    } else {
-      tunnelSetStatus('Criando túnel… (pode levar ~10s)');
-      api('/api/tunnel/start', { method: 'POST' }).then(function (r) { return r.json(); }).then(function (j) {
-        tunnelBusy = false;
-        tunnelRender(j);
-        if (j.status === 'running' && j.url) toast('Túnel público criado: <b>' + escapeHtml(j.url) + '</b>', 'info', 12000);
-        else if (j.status !== 'running') toast(escapeHtml(j.error || 'Falha ao criar o túnel.'), 'err', 12000);
-      }).catch(function (e) { tunnelBusy = false; tunnelSetStatus('<span class="err">●</span> Erro: ' + escapeHtml(e.message)); });
-    }
-  }
-
-  // Conecta a um servidor informado (túnel HTTPS ou IP da LAN) e recarrega os
-  // consoles/jogos. Usado pelos botões Conectar, Colar e pelo auto-connect.
-  function connectToServer(v) {
-    var base = normalizarBase(v);
-    setApiBase(base);
-    updateServerStatus();
-    var alvo = base || serverLabel();
-    if (el('server-status')) el('server-status').innerHTML = '<span class="ok">●</span> Conectando a <b>' + escapeHtml(alvo) + '</b>…';
-
-    // Mixed Content: uma página HTTPS (ex.: Vercel) NÃO consegue falar com um
-    // servidor HTTP da rede local (o navegador bloqueia a requisição). Só
-    // localhost/127.0.0.1 escapam. Avisamos e damos o caminho certo: abrir o
-    // próprio endereço do PC. Sem isso o erro aparece como "Failed to fetch".
-    var isHttp = /^http:/i.test(base);
-    var isLocal = /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/i.test(base);
-    if (location.protocol === 'https:' && isHttp && !isLocal) {
-      // Caminho 1: abrir a própria página do PC (same-origin, sem bloqueio).
-      var aviso = 'De um site <b>HTTPS</b> o navegador <b>bloqueia</b> a conexão com seu PC em <b>HTTP</b> (Mixed Content).<br>' +
-        'Abra o endereço do PC diretamente: <a href="' + escapeHtml(base) + '/play.html" target="_blank" rel="noopener"><b>' +
-        escapeHtml(base) + '/play.html</b></a>';
-      // Caminho 2: se o PC também tem HTTPS (cert em certs/), use a porta 3443 —
-      // aí é HTTPS->HTTPS e o navegador deixa passar (aceite o certificado).
-      var httpsSug = serverLanHttpsUrl || httpsVariantOf(base);
-      if (httpsSug) {
-        aviso += '<br>Ou use o <b>HTTPS</b> do PC (mesma rede): <a href="' + escapeHtml(httpsSug) +
-          '/play.html" target="_blank" rel="noopener"><b>' + escapeHtml(httpsSug) + '/play.html</b></a> (aceite o aviso de certificado).';
-      } else {
-        aviso += '<br>Para usar o <b>HTTPS</b> do PC, gere o certificado (<code>npm run cert</code>) e reabra o servidor.';
-      }
-      if (el('server-status')) el('server-status').innerHTML = '<span class="err">●</span> ' + aviso;
-      toast(aviso, 'warn', 14000);
-    }
-
-    return checkBackend()
-      .then(function () { return loadSystems(); })
-      .then(function () {
-        refreshBiosUI();
-        toast('Conectado a <b>' + escapeHtml(serverLabel()) + '</b>', 'info');
-        // NÃO escondemos o painel: ele serve justamente para o jogador continuar
-        // buscando outros PCs/pastas na rede e trocar de servidor quando quiser.
-        // Quem fecha é o botão "🌐 Servidor".
-      })
-      .catch(function (e) {
-        toast('Não foi possível conectar em <b>' + escapeHtml(alvo) + '</b>.<br>' +
-          'Confira o endereço, se o PC do host está ligado e se nada bloqueia a rede (firewall/Mixed Content).', 'err');
-        throw e;
-      });
   }
 
   // Copia um texto para a área de transferência (com fallback para navegadores
@@ -2008,186 +1771,6 @@
     renderLinks(sys);
     loadGames(sys);
     window.scrollTo(0, 0);
-  }
-
-  // ================================================== DESCOBERTA DE SERVIDORES
-  function runDiscovery() {
-    var btn = el('btn-discover');
-    var status = el('discover-status');
-    var list = el('discover-list');
-    if (btn) btn.disabled = true;
-    if (status) status.textContent = 'Procurando servidores na rede… (alguns segundos)';
-    if (list) list.innerHTML = '<div class="empty">Sondando a rede…</div>';
-
-    // A varredura é feita POR UM SERVIDOR WebEMU (ele enxerga a rede local onde
-    // roda). Se a página está em um host público (Vercel) e ainda não apontamos
-    // para o PC da rede, a busca roda na rede da nuvem e não acha nada útil.
-    var base = getApiBase();
-    var basePublica = !base && location.protocol === 'https:';
-    if (basePublica) {
-      if (status) status.textContent = 'Conecte antes ao seu PC (endereço http://IP:3000) para varrer a rede dele.';
-    }
-
-    api('/api/discover?timeout=450').then(function (r) {
-      if (!r.ok) throw new Error('HTTP ' + r.status);
-      return r.json();
-    }).then(function (j) {
-      renderDiscovered(j);
-      if (status) {
-        var n = (j.servers || []).length;
-        var redes = (j.networks || []).join(', ');
-        status.textContent = n + (n === 1 ? ' servidor encontrado' : ' servidores encontrados') +
-          (redes ? ' em ' + redes : '') +
-          ' (' + (Math.round((j.durationMs || 0) / 100) / 10) + 's)';
-        if (!n && basePublica) {
-          status.textContent += ' — a página é HTTPS, então a varredura rodou na nuvem. Conecte ao PC da sua rede (http://IP:3000).';
-        }
-      }
-    }).catch(function (e) {
-      if (status) status.textContent = 'Falha na busca: ' + (e && e.message ? e.message : e);
-      if (list) list.innerHTML = '<div class="empty">Não foi possível buscar os servidores.</div>';
-    }).finally(function () {
-      if (btn) btn.disabled = false;
-    });
-  }
-
-  function renderDiscovered(j) {
-    var list = el('discover-list');
-    if (!list) return;
-    list.innerHTML = '';
-    var servers = j.servers || [];
-    if (!servers.length) {
-      list.innerHTML = '<div class="empty">Nenhum servidor encontrado. Confira se os aparelhos estão na mesma rede (Wi-Fi).</div>';
-      return;
-    }
-    servers.forEach(function (s) {
-      var item = document.createElement('div');
-      item.className = 'list-item srv-item';
-
-      var top = document.createElement('div');
-      top.className = 'top';
-
-      var meta = document.createElement('div');
-      meta.className = 'meta';
-      var withGames = (s.systems || []).filter(function (x) { return x.count > 0; });
-      meta.innerHTML = '<b>' + escapeHtml(s.name || 'WebEMU') + (s.self ? ' · este aparelho' : '') + '</b>' +
-        '<span>' + escapeHtml(s.url) + ' · ' + withGames.length + ' consoles · ' + (s.games || 0) + ' jogos' +
-        (s.https ? ' · HTTPS' : '') + '</span>';
-
-      var use = document.createElement('button');
-      use.type = 'button';
-      use.className = 'btn sm primary';
-      use.textContent = s.self ? 'É este' : 'Usar';
-      if (s.self) use.disabled = true;
-      use.addEventListener('click', function () {
-        connectToServer(s.url);
-        el('server-panel').classList.add('hidden');
-      });
-
-      top.appendChild(meta);
-      top.appendChild(use);
-      item.appendChild(top);
-
-      if (withGames.length) {
-        var chips = document.createElement('div');
-        chips.className = 'srv-consoles';
-        chips.innerHTML = withGames.map(function (x) {
-          return '<span class="srv-chip">' + escapeHtml(x.icon || '🎮') + ' ' +
-            escapeHtml(x.short || x.name) + ' <b>' + (x.count || 0) + '</b></span>';
-        }).join('');
-        item.appendChild(chips);
-      }
-      list.appendChild(item);
-    });
-  }
-
-  // ============================================== PASTAS COMPARTILHADAS ======
-  // Acha as pastas compartilhadas (SMB) da rede local e deixa indexar os jogos
-  // direto de outro PC — sem copiar nada para este aparelho.
-  function runShares() {
-    var btn = el('btn-shares'), status = el('shares-status'), list = el('shares-list');
-    if (btn) btn.disabled = true;
-    if (status) status.textContent = 'Procurando pastas na rede… (pode levar alguns segundos)';
-    if (list) list.innerHTML = '<div class="empty">Procurando…</div>';
-    api('/api/shares').then(function (r) {
-      if (!r.ok) throw new Error('HTTP ' + r.status);
-      return r.json();
-    }).then(function (j) {
-      renderShares(j);
-    }).catch(function (e) {
-      if (status) status.textContent = 'Falha na busca: ' + (e && e.message ? e.message : e);
-      if (list) list.innerHTML = '<div class="empty">Não foi possível procurar as pastas.</div>';
-    }).then(function () {
-      if (btn) btn.disabled = false;
-    });
-  }
-
-  function renderShares(j) {
-    var list = el('shares-list'), status = el('shares-status');
-    var shares = (j && j.shares) || [];
-    if (status) {
-      var n = shares.length;
-      status.textContent = n + (n === 1 ? ' pasta encontrada' : ' pastas encontradas') +
-        ' · ' + ((j && j.accessible) || 0) + ' acessível(is)' +
-        ' em ' + (Math.round(((j && j.durationMs) || 0) / 100) / 10) + 's';
-    }
-    if (!list) return;
-    list.innerHTML = '';
-    if (!shares.length) {
-      list.innerHTML = '<div class="empty">Nenhuma pasta compartilhada encontrada. No Windows, ative a <b>descoberta de rede</b> e compartilhe a pasta dos jogos (botão direito na pasta → Propriedades → Compartilhamento → Compartilhar).</div>';
-      var av = (j && j.avisos) || [];
-      if (av.length) {
-        var d = document.createElement('div');
-        d.className = 'empty';
-        d.innerHTML = escapeHtml(av[0]);
-        list.appendChild(d);
-      }
-      return;
-    }
-    shares.forEach(function (s) {
-      var item = document.createElement('div');
-      item.className = 'list-item';
-      var top = document.createElement('div');
-      top.className = 'top';
-      var meta = document.createElement('div');
-      meta.className = 'meta';
-      meta.innerHTML = '<b>📁 ' + escapeHtml(s.path) + '</b><span>' +
-        (s.comment ? escapeHtml(s.comment) + ' · ' : '') +
-        (s.accessible ? '✅ acessível' : '🔒 precisa de permissão') + '</span>';
-      var use = document.createElement('button');
-      use.type = 'button';
-      use.className = 'btn sm primary';
-      use.textContent = 'Usar';
-      if (!s.accessible) use.disabled = true;
-      use.addEventListener('click', function () { usarPastaCompartilhada(s.path); });
-      top.appendChild(meta);
-      top.appendChild(use);
-      item.appendChild(top);
-      list.appendChild(item);
-    });
-  }
-
-  // Indexa os jogos de uma pasta compartilhada num console.
-  function usarPastaCompartilhada(path) {
-    var sys = (currentSystem && currentSystem.id) || 'snes';
-    var escolhido = window.prompt('Indexar em qual console?\n(ex.: snes, nes, gba, n64, ps1…)', sys);
-    if (!escolhido) return;
-    escolhido = String(escolhido).trim();
-    if (!escolhido) return;
-    toast('Indexando <b>' + escapeHtml(path) + '</b>…', 'info');
-    api('/api/config', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ system: escolhido, dir: path })
-    }).then(function (r) {
-      return r.json().then(function (j) { return { ok: r.ok, j: j }; });
-    }).then(function (res) {
-      if (!res.ok || res.j.error) { toast('Erro: ' + escapeHtml(res.j.error || 'falha'), 'err'); return; }
-      toast(res.j.message || 'Pasta atualizada.', 'ok');
-      loadSystems();
-    }).catch(function (e) {
-      toast('Falha: ' + escapeHtml(e && e.message ? e.message : e), 'err');
-    });
   }
 
   // ======================================================== NETPLAY (LAN) ===
@@ -3742,69 +3325,6 @@
 
   // -------------------------------------------------------------------- init
   function setupUI() {
-    el('btn-server-toggle').addEventListener('click', function () {
-      var panel = el('server-panel');
-      panel.classList.toggle('hidden');
-      el('server-input').value = getApiBase();
-      if (!panel.classList.contains('hidden')) refreshTunnel();
-    });
-    el('btn-connect').addEventListener('click', function () {
-      var v = el('server-input').value.trim();
-      setApiBase(v);
-      connectToServer(v);
-    });
-    el('server-input').addEventListener('keydown', function (e) { if (e.key === 'Enter') el('btn-connect').click(); });
-
-    // 📋 Colar: lê a área de transferência, conecta e avisa o resultado.
-    // Funciona no PC e no celular (o celular pede permissão de colar).
-    el('btn-paste-server').addEventListener('click', function () {
-      function conectar(texto) {
-        var v = String(texto || '').trim().replace(/\/+$/, '');
-        if (!v) { toast('Área de transferência vazia.', 'warn'); return; }
-        // aceita link completo com ?server=... e extrai só a base
-        try {
-          var m = v.match(/[?&]server=([^&]+)/);
-          if (m) v = decodeURIComponent(m[1]).replace(/\/+$/, '');
-        } catch (e) {}
-        if (!/^https?:\/\//i.test(v)) { toast('Cole um endereço http:// ou https://', 'warn'); return; }
-        el('server-input').value = v;
-        setApiBase(v);
-        connectToServer(v);
-      }
-      if (navigator.clipboard && navigator.clipboard.readText) {
-        navigator.clipboard.readText().then(conectar).catch(function () {
-          toast('Não foi possível ler a área de transferência. Cole no campo e clique em Conectar.', 'warn');
-          el('server-input').focus();
-        });
-      } else {
-        toast('Seu navegador não permite colar automaticamente. Cole no campo e clique em Conectar.', 'warn');
-        el('server-input').focus();
-      }
-    });
-
-    // 🔗 Copiar link de acesso: gera um link único que já conecta no servidor
-    // atual (e na sala, se estiver numa). Funciona em qualquer aparelho.
-    // Descoberta de servidores na rede
-    el('btn-discover').addEventListener('click', runDiscovery);
-    el('btn-shares').addEventListener('click', runShares);
-
-    // 🔓/🔒 Abrir a página deste PC em outro aparelho (mesma rede).
-    el('btn-open-http').addEventListener('click', function () {
-      var base = serverLanUrl || getApiBase();
-      if (!base) { toast('Conecte a um servidor primeiro.', 'warn'); return; }
-      window.open(String(base).replace(/\/+$/, '') + '/play.html', '_blank', 'noopener');
-    });
-    el('btn-open-https').addEventListener('click', function () {
-      if (!serverLanHttpsUrl) { toast('Este servidor não tem HTTPS. Rode `npm run cert` e reabra o servidor.', 'warn'); return; }
-      window.open(serverLanHttpsUrl + '/play.html', '_blank', 'noopener');
-    });
-
-    // 🌍 Túnel público (compartilhar pela internet).
-    el('btn-tunnel').addEventListener('click', toggleTunnel);
-    el('btn-tunnel-copy').addEventListener('click', function () {
-      if (tunnelUrl) copiarTexto(tunnelUrl, 'Endereço do túnel copiado!', 'btn-tunnel-copy');
-    });
-
     // Netplay: lobby
     el('btn-lobby-toggle').addEventListener('click', function () {
       var panel = el('lobby-panel');
@@ -4010,7 +3530,6 @@
 
   document.addEventListener('DOMContentLoaded', function () {
     setupUI();
-    updateServerStatus();
 
     // ?server=URL → conecta automaticamente num backend remoto (túnel/servidor)
     // e guarda a escolha. Assim UM link basta: o amigo abre no celular ou no PC
@@ -4048,7 +3567,7 @@
       })
       .catch(function () {
         el('brand-sub').textContent = 'Servidor offline';
-        el('systems-grid').innerHTML = '<div class="empty">Servidor indisponível. Inicie o backend e recarregue, ou clique em <b>🌐 Servidor</b> para apontar outro.</div>';
+        el('systems-grid').innerHTML = '<div class="empty">Servidor indisponível. Inicie o backend e recarregue.</div>';
         if (!roomParam) showHub();
       });
   });

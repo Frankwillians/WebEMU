@@ -60,8 +60,8 @@ Abra **http://localhost:3000/play.html**, escolha um **console** e pronto. Você
 > **Aviso:** use apenas ROMs/BIOS que você possui legalmente. As pastas de
 > ROMs (`games/`, `roms/`, `ps2games/`) são ignoradas pelo Git.
 
-Do outro PC/celular na mesma rede: `http://SEU-IP-LOCAL:3000/play.html`.
-O endereço correto aparece no botão *🌐 Servidor* (e no log ao iniciar o servidor).
+Do outro PC/celular na mesma rede: `http://SEU-IP-LOCAL:3000/play.html`
+(o endereço correto aparece no log ao iniciar o servidor).
 
 > **Precisa de internet?** O EmulatorJS é carregado de um CDN. A ROM local é
 > processada no seu navegador; nada é enviado para fora.
@@ -86,7 +86,12 @@ Range: bytes=0-          # opcional (retomada/seek)
 > nome. Ele reaparece no cartão **🔗 Links salvos** daquele console — dá para
 > rejogar (▶), renomear (✏️) ou remover (🗑) a qualquer momento. Rejogar o mesmo
 > link **não** duplica (a chave é a própria URL), e cada navegador guarda a sua
-> coleção (nada vai para o servidor).
+> coleção (nada vai para o servidor). Esses jogos **contam** na quantidade de
+> jogos do console.
+>
+> **Backup da coleção.** Ainda no cartão **🔗 Links salvos**, **⬇️ Exportar
+> backup** baixa um JSON com a coleção de **todos os consoles**; **⬆️ Importar
+> backup** restaura esse arquivo em outro aparelho (mescla e não duplica).
 
 
 ### ▲ Deploy na Vercel
@@ -225,16 +230,21 @@ servidor** usar — sem editar código.
 
 ### Escolher o servidor (rede)
 
-No cartão **Jogos pela rede** (em `/play.html`) há o campo **Servidor**:
+Por padrão a página usa o **próprio servidor que a abriu** (`location.origin`).
+Para apontar para os jogos de **outra máquina** que também esteja rodando o
+backend, abra a página com o parâmetro **`?server=`**:
 
-- Deixe **vazio** para usar o próprio servidor que abriu a página;
-- Digite `http://192.168.0.5:3000` (exemplo) para usar os jogos de **outra
-  máquina** que também esteja rodando o backend nesta mesma rede;
-- Clique em **Conectar**. A escolha fica salva no navegador (localStorage).
-  (Pode digitar só `192.168.0.5:3000` — o `http://` é adicionado sozinho.)
+```text
+https://SEU-SITE/play.html?server=http://192.168.0.5:3000
+```
 
-Assim o mesmo site pode apontar para qualquer computador que esteja servindo
-uma pasta de jogos.
+A escolha fica salva no navegador (`localStorage`) e passa a valer para a API e
+para o netplay. É esse mesmo endereço que vai embutido no **link de convite**.
+
+> Se a URL do `?server=` for um endereço **HTTPS** (ex.: o do PC via
+> `npm run cert` → `https://192.168.0.5:3443`), funciona até a partir do site no
+> Vercel. Um `?server=` em **HTTP** só funciona abrindo a página de dentro da
+> mesma rede (ver o aviso de Mixed Content abaixo).
 
 > ⚠️ **Página HTTPS (Vercel) → servidor HTTP da rede:** o navegador bloqueia
 > esse pedido (Mixed Content) — não é algo que um cabeçalho resolva. Caminhos
@@ -253,21 +263,6 @@ uma pasta de jogos.
 > 🔒 Para o navegador deixar uma página **pública** chamar a API num **IP
 > privado**, o servidor responde o preflight **Private Network Access**
 > (`Access-Control-Allow-Private-Network: true`). Isso é automático.
-
-### Descobrir servidores na rede (automático)
-
-No cartão **Servidor** (em `/play.html`) há o botão **🔍 Buscar servidores na
-rede**: ele varre a sua rede local (as sub-redes `/24` reais, ignorando
-adaptadores virtuais/VPN) e lista **todos** os WebEMU encontrados, mostrando
-para cada um:
-
-- o nome da máquina e o endereço (`http://192.168.0.9:3000`);
-- **quantos consoles e quantos jogos** ela tem;
-- uma faixa com os consoles e a contagem de jogos de cada um (ex.: `🎮 SNES 785`).
-
-Clique em **Usar** para apontar o site para aquele servidor e jogar os jogos que
-estão nele — sem digitar IP. Um servidor local (`npm start`) responde ao mesmo
-tempo em HTTP (`:3000`) e HTTPS (`:3443`, se houver certificado).
 
 ### Jogar em rede (netplay com lobby)
 
@@ -330,19 +325,8 @@ frontend **reconecta sozinho** e volta para a mesma sala.
 ### 🌍 Alternativa: jogar pela internet com túnel público
 
 Se quiser levar também a **biblioteca de ROMs do seu PC** (em vez de só o
-netplay), exponha o servidor local por um túnel HTTPS/WSS (sem deploy).
-
-**Pelo próprio site (mais fácil):** no painel **🌐 Servidor**, clique em
-**🌍 Criar túnel público**. Ele sobe o `cloudflared` (quick tunnel, sem conta) e
-mostra um endereço `https://…trycloudflare.com` — use **🔗 Copiar endereço** e
-mande para os amigos. O endereço público passa a ser usado no **link de convite**
-quando você está vendo em `localhost`. O botão **⏹️ Parar túnel** encerra.
-
-> Requer o `cloudflared` no PATH: `winget install --id Cloudflare.cloudflared`.
-> (Se estiver em outro lugar, aponte `CLOUDFLARED_BIN` para o executável. Sem
-> `cloudflared`, o backend também aceita `ngrok`.)
-
-**Manualmente** (se preferir):
+netplay), exponha o servidor local por um túnel HTTPS/WSS que **você** sobe
+(sem deploy):
 
 ```powershell
 # instale o cloudflared (uma vez)
@@ -362,7 +346,7 @@ Para o link de convite sair certo mesmo que **você** esteja vendo em
 $env:PUBLIC_URL="https://algo-aleatorio.trycloudflare.com"; npm start
 ```
 
-Aí o botão **🔗 Copiar link** gera `https://…/play.html?room=CÓDIGO`.
+Aí o botão **🔗 Copiar link** gera `https://…/play.html?room=CÓDIGO&server=…`.
 
 > ⚠️ Enquanto o túnel está ligado, **este PC fica acessível na internet**
 > (jogos, API e netplay). Use só quando precisar e, de preferência, defina
@@ -448,7 +432,6 @@ core lê a lista (o `.m3u` referencia os discos por caminho relativo).
 | GET    | `/api/systems/:id/cover?name=<nome>` | **Capa do jogo** (proxy do libretro-thumbnails, com cache) |
 | GET    | `/roms/:systemId/...`                | Arquivos do console (com Range)                      |
 | POST   | `/api/systems/:id/launch`            | Abre o jogo no RetroArch do PC (modo “PC servidor”)  |
-| GET    | `/api/discover`                      | **Varre a rede local** e lista outros servidores WebEMU (com consoles/jogos) |
 | GET    | `/api/netplay/ice`                   | Servidores ICE (STUN/TURN) que o netplay usa (STUN + TURN público por padrão) |
 | WS     | `/signaling`                         | Sinalizador + lobby das salas — **servidor local** (modo LAN)                |
 | WS     | `/api/ws`                            | Sinalizador + lobby das salas — **Vercel** (modo online, `api/ws.js`)        |
@@ -616,7 +599,6 @@ engrenagem). Gamepads USB/Bluetooth funcionam automaticamente (Gamepad API).
 - [x] **Dois sinalizadores**: 🏠 LAN (`/signaling`) e 🌐 Online (`/api/ws`, serverless na Vercel)
 - [x] **Link de convite** que já carrega `?room=`, `?server=` e `?ws=` — o convidado conecta sozinho
 - [x] **Auto-reconexão**: se a conexão cair (ex.: duração máxima da função na Vercel), volta para a mesma sala
-- [x] **Descoberta de servidores na rede** (`/api/discover`) mostrando consoles e jogos de cada um
 - [ ] Rollback / sincronização de estados
 
 ### 🔜 Fase 3 — Extras
@@ -637,8 +619,7 @@ engrenagem). Gamepads USB/Bluetooth funcionam automaticamente (Gamepad API).
 | Variável | Efeito |
 |----------|--------|
 | `TURN_URLS`, `TURN_USERNAME`, `TURN_CREDENTIAL` | TURN próprio para o WebRTC (padrão: TURN público gratuito) |
-| `PUBLIC_URL` | URL pública usada nos links de convite (túnel externo já configurado) |
-| `CLOUDFLARED_BIN`, `NGROK_BIN` | Caminho do binário do túnel, se estiver fora do PATH |
+| `PUBLIC_URL` | URL pública (ex.: túnel HTTPS que **você** subiu) usada nos links de convite |
 | `ACCESS_TOKEN` | Token opcional para proteger a API e o sinalizador |
 | `NETPLAY_WS=0` | **Desliga** a opção 🌐 Online na Vercel |
 

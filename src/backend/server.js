@@ -12,7 +12,7 @@ import { fileURLToPath } from 'url';
 import { networkInterfaces, hostname } from 'os';
 import { existsSync, mkdirSync, statSync, readdirSync, readFileSync } from 'fs';
 import { writeFile } from 'fs/promises';
-import { execFile, spawn, spawnSync } from 'node:child_process';
+import { spawn } from 'node:child_process';
 
 /**
  * Descobre o melhor IP LAN da máquina.
@@ -180,8 +180,8 @@ async function describeSystem(system) {
 }
 
 /**
- * Resumo leve dos consoles (sem tocar no disco) — usado pelo /api/health e
- * pela descoberta na rede, que precisam de uma resposta rápida.
+ * Resumo leve dos consoles (sem tocar no disco) — usado pelo /api/health, que
+ * precisa de uma resposta rápida.
  */
 function systemsSummary() {
   return SYSTEMS.map((system) => {
@@ -301,7 +301,7 @@ app.use((req, res, next) => {
 
 // ==================== API REST ====================
 
-// Health check — também serve de "cartão de visita" para a descoberta na rede.
+// Health check — status do servidor (versão, consoles, netplay e endereços).
 app.get('/api/health', (req, res) => {
   const lanIP = getLocalIP();
   const summary = systemsSummary();
@@ -325,7 +325,7 @@ app.get('/api/health', (req, res) => {
     systems: summary,
     netplay: netplayWsEnabled,
     ws: wsUrl,
-    publicUrl: PUBLIC_URL || tunnel.url || null,
+    publicUrl: PUBLIC_URL || null,
     lanIP,
     lanUrl: `http://${lanIP}:${config.httpPort}`,
     lanHttpsUrl: httpsServer ? `https://${lanIP}:${config.httpsPort}` : null
@@ -336,15 +336,6 @@ app.get('/api/health', (req, res) => {
 app.get('/api/netplay/ice', (req, res) => {
   res.json({ iceServers: iceServers() });
 });
-
-// ==================== DESCOBERTA DE SERVIDORES NA REDE ====================
-//
-// Varre as sub-redes locais (/24) procurando outras instâncias do WebEMU
-// escutando em HTTP/HTTPS, para o jogador se conectar ao servidor de outro
-// PC/celular da mesma rede (com os jogos que ele tem).
-//
-// A resposta traz, para cada servidor encontrado, o resumo dos consoles e a
-// contagem de jogos — assim o jogador vê "quem tem o quê" antes de conectar.
 
 const VERSION = (() => {
   try {
@@ -365,257 +356,6 @@ const PUBLIC_URL = String(process.env.PUBLIC_URL || '').replace(/\/+$/, '');
 // e /api/netplay/ice) e o WebSocket de sinalização — recomendado ao expor o
 // servidor na internet por um túnel. Ex.: ACCESS_TOKEN="minha-senha"
 const ACCESS_TOKEN = String(process.env.ACCESS_TOKEN || '');
-
-/** Lista os prefixos /24 das interfaces IPv4 privadas reais (ignora VPN virtuais) */
-function localSubnets() {
-  const nets = networkInterfaces();
-  const skip = /hamachi|virtualbox|vmware|hyper-?v|vethernet|loopback|bluetooth|tailscale|zerotier|wintun|wireguard|docker|vpn|tun\b|tap\b/i;
-  const subnets = new Set();
-
-  // Faixas /24 típicas de adaptadores SOMENTE-HOST de VMs (VirtualBox, libvirt,
-  // Parallels, QEMU/Docker). No Windows esses adaptadores às vezes ficam com
-  // nome genérico ("Ethernet 2"), então o filtro por nome não basta e a busca
-  // varreria uma rede que não tem servidor nenhum — só perdendo tempo.
-  const VIRTUAL_SUBNETS = new Set([
-    '192.168.56', '192.168.99', '192.168.122', '192.168.64',
-    '172.17.0', '10.0.2', '10.211.55', '10.37.129', '192.168.68'
-  ]);
-
-  for (const name of Object.keys(nets)) {
-    if (skip.test(name)) continue;
-    for (const net of nets[name] || []) {
-      if (net.family !== 'IPv4' || net.internal) continue;
-      if (net.address.startsWith('169.254.')) continue;
-      const mask = net.netmask ? net.netmask.split('.').map(Number) : [255, 255, 255, 0];
-      // Só varremos máscaras /24 ou maiores (cabem 254 hosts) para não explodir.
-      if (mask[0] !== 255 || mask[1] !== 255 || mask[2] !== 255) continue;
-      const parts = net.address.split('.');
-      const subnet = `${parts[0]}.${parts[1]}.${parts[2]}`;
-      if (VIRTUAL_SUBNETS.has(subnet)) continue;
-      subnets.add(subnet);
-    }
-  }
-  return Array.from(subnets);
-}
-
-/** Consulta /api/health de um host com timeout curto */
-async function probeHealth(ip, port, scheme, timeoutMs) {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    const res = await fetch(`${scheme}://${ip}:${port}/api/health`, {
-      signal: controller.signal,
-      headers: { Accept: 'application/json' }
-    });
-    if (!res.ok) return null;
-    const json = await res.json();
-    if (!json || json.status !== 'ok') return null;
-    return json;
-  } catch {
-    return null;
-  } finally {
-    clearTimeout(timer);
-  }
-}
-
-app.get('/api/discover', async (req, res) => {
-  const started = Date.now();
-  const timeout = Math.min(2000, Math.max(150, parseInt(req.query.timeout || '450', 10) || 450));
-  const subnets = localSubnets();
-  const selfIP = getLocalIP();
-
-  // Portas para sondar: HTTP sempre; HTTPS se houver certificado configurado.
-  const ports = [{ port: config.httpPort, scheme: 'http' }];
-  if (httpsServer) ports.push({ port: config.httpsPort, scheme: 'https' });
-  // Também sonda portas alternativas comuns, para achar instâncias que não
-  // estejam rodando na porta padrão deste projeto.
-  for (const p of [80, 3000, 3443, 8080, 8000]) {
-    if (p !== config.httpPort && p !== config.httpsPort) ports.push({ port: p, scheme: 'http' });
-  }
-
-  const targets = [];
-  for (const base of subnets) {
-    for (let host = 1; host <= 254; host++) targets.push(`${base}.${host}`);
-  }
-
-  const found = new Map(); // url -> servidor
-  let cursor = 0;
-  let selfFound = false;
-
-  // IPs desta própria máquina (para não listá-la várias vezes quando há mais
-  // de uma interface — ex.: Wi-Fi + adaptador virtual).
-  const localIPs = new Set();
-  const allNets = networkInterfaces();
-  for (const name of Object.keys(allNets)) {
-    for (const net of allNets[name] || []) {
-      if (net.family === 'IPv4') localIPs.add(net.address);
-    }
-  }
-
-  async function worker() {
-    while (cursor < targets.length && Date.now() - started < budgetMs) {
-      const ip = targets[cursor++];
-      // O próprio host responde rápido; deixa para o fim se for muito lento.
-      for (const p of ports) {
-        const url = `${p.scheme}://${ip}:${p.port}`;
-        if (found.has(url)) continue;
-        if (localIPs.has(ip) && selfFound) continue;
-        const health = await probeHealth(ip, p.port, p.scheme, timeout);
-        if (!health) continue;
-        if (localIPs.has(ip)) selfFound = true;
-        const systems = Array.isArray(health.systems) ? health.systems : [];
-        found.set(url, {
-          url,
-          ip,
-          port: p.port,
-          https: p.scheme === 'https',
-          name: health.name || 'WebEMU',
-          version: health.version || null,
-          games: systems.reduce((sum, s) => sum + (Number(s.count) || 0), 0),
-          systems: systems.map((s) => ({
-            id: s.id,
-            name: s.name,
-            short: s.short,
-            icon: s.icon,
-            count: Number(s.count) || 0
-          })),
-          netplay: Boolean(health.netplay),
-          self: ip === selfIP && p.port === config.httpPort
-        });
-      }
-    }
-  }
-
-  // Varredura em paralelo, com teto de tempo: nunca deixa a UI pendurada.
-  // 256 sondagens simultâneas com timeout curto cobrem uma /24 em poucos segundos.
-  const budgetMs = Math.min(9000, Math.max(2500, timeout * 10));
-  const CONCURRENCY = 256;
-  await Promise.all(Array.from({ length: CONCURRENCY }, () => worker()));
-
-  const servers = Array.from(found.values()).sort((a, b) => {
-    if (a.self !== b.self) return a.self ? -1 : 1;
-    if (b.games !== a.games) return b.games - a.games;
-    return a.ip.localeCompare(b.ip, undefined, { numeric: true });
-  });
-
-  res.json({
-    status: 'ok',
-    name: serverName(),
-    self: `http://${selfIP}:${config.httpPort}`,
-    networks: subnets.map((s) => `${s}.0/24`),
-    scanned: targets.length,
-    durationMs: Date.now() - started,
-    servers
-  });
-});
-
-
-// ==================== PASTAS COMPARTILHADAS NA REDE (SMB) ====================
-//
-// Acha as PASTAS COMPARTILHADAS da rede local (o clássico "compartilhamento" do
-// Windows) para o jogador indexar os jogos direto de outro PC, sem copiar nada.
-// Cada item traz o caminho UNC (\\PC\pasta) e se está acessível.
-//
-// No Windows usa `net view` (lista de máquinas) e `net view \\PC` (lista de
-// compartilhamentos). Em Linux/macOS tenta `smbclient` se estiver instalado.
-
-/** Executa um comando e devolve o stdout (string vazia se falhar). */
-function runCmd(cmd, args, timeoutMs = 8000) {
-  return new Promise((resolve) => {
-    execFile(cmd, args, { timeout: timeoutMs, windowsHide: true, maxBuffer: 8 * 1024 * 1024 },
-      (err, stdout) => resolve(err ? '' : String(stdout || '')));
-  });
-}
-
-/** `net view` → lista de computadores (linhas que começam com \\) */
-function parseNetViewComputers(out) {
-  const pcs = [];
-  for (const raw of String(out).split(/\r?\n/)) {
-    const line = raw.trim();
-    if (!line.startsWith('\\\\')) continue;
-    const m = line.match(/^\\\\([^\s\\]+)\s*(.*)$/);
-    if (m) pcs.push({ name: m[1], comment: (m[2] || '').trim() });
-  }
-  return pcs;
-}
-
-/** `net view \\PC` → lista de compartilhamentos de disco */
-function parseNetViewShares(out) {
-  const shares = [];
-  for (const raw of String(out).split(/\r?\n/)) {
-    const line = raw.trim();
-    // "Jogos        Disco   Meus jogos de PS1"
-    const m = line.match(/^([^\s]+)\s+(Disco|Disk)\b\s*(.*)$/i);
-    if (!m) continue;
-    if (m[1].endsWith('$')) continue; // compartilhamentos administrativos (C$, ADMIN$)
-    shares.push({ name: m[1], comment: (m[3] || '').trim() });
-  }
-  return shares;
-}
-
-/** Dá para ler a pasta? (UNC pode exigir usuário/senha do outro PC) */
-function pastaAcessivel(dir) {
-  try { readdirSync(dir); return true; } catch { return false; }
-}
-
-app.get('/api/shares', async (req, res) => {
-  const started = Date.now();
-  const shares = [];
-  const avisos = [];
-
-  try {
-    if (process.platform === 'win32') {
-      const eu = (hostname() || '').toUpperCase();
-      const pcs = parseNetViewComputers(await runCmd('net', ['view']));
-
-      if (!pcs.length) {
-        avisos.push('A "descoberta de rede" do Windows pode estar desligada. Ligue em: Painel de Controle → Central de Rede e Compartilhamento → Alterar configurações de compartilhamento avançadas → ativar "Descoberta de rede" e "Compartilhamento de arquivo e impressora" (perfil privado).');
-      }
-
-      const outros = pcs.filter(p => p.name.toUpperCase() !== eu);
-      // Limita a 15 PCs para não demorar demais.
-      for (const pc of outros.slice(0, 15)) {
-        const lista = parseNetViewShares(await runCmd('net', ['view', '\\\\' + pc.name]));
-        for (const sh of lista) {
-          const unc = '\\\\' + pc.name + '\\' + sh.name;
-          shares.push({
-            path: unc,
-            pc: pc.name,
-            share: sh.name,
-            comment: sh.comment,
-            accessible: pastaAcessivel(unc)
-          });
-        }
-      }
-    } else {
-      // Linux/macOS: smbclient -L (se existir) — melhor esforço.
-      const out = await runCmd('smbclient', ['-L', '-N', '127.0.0.1'], 6000);
-      if (out) {
-        for (const raw of out.split(/\r?\n/)) {
-          const m = raw.match(/^\s*(\S+)\s+Disk/i);
-          if (!m || m[1].endsWith('$')) continue;
-          shares.push({ path: 'smb://127.0.0.1/' + m[1], pc: '127.0.0.1', share: m[1], comment: '', accessible: false });
-        }
-      } else {
-        avisos.push('A busca completa de pastas compartilhadas funciona no Windows. No Linux/macOS instale o "smbclient".');
-      }
-    }
-  } catch (e) {
-    avisos.push('Falha ao procurar pastas: ' + e.message);
-  }
-
-  // As que dão para ler vêm primeiro.
-  shares.sort((a, b) => (a.accessible === b.accessible) ? 0 : (a.accessible ? -1 : 1));
-
-  res.json({
-    status: 'ok',
-    shares,
-    count: shares.length,
-    accessible: shares.filter(s => s.accessible).length,
-    avisos,
-    durationMs: Date.now() - started
-  });
-});
 
 // Lista todos os jogos indexados
 app.get('/api/games', async (req, res) => {
@@ -1355,153 +1095,6 @@ app.use(express.static(staticDir, {
 // signaling quando rodando como servidor de verdade.
 if (!process.env.VERCEL) setupSignalingServer(httpServer);
 
-// ==================== TÚNEL PÚBLICO (compartilhar pela internet) ====================
-//
-// Sobe um túnel HTTPS para ESTE servidor e devolve a URL pública, para o host
-// compartilhar a sala/biblioteca com quem está em OUTRA rede (outra casa). Não
-// precisa de conta: usa o "quick tunnel" do cloudflared (preferido) ou o ngrok,
-// se estiver instalado. O túnel expõe este PC (API + ROMs + netplay) na
-// internet — use ACCESS_TOKEN se a rede não for de confiança.
-//
-// Se PUBLIC_URL já estiver definida (um túnel que VOCÊ subiu por fora), ela
-// manda: o botão apenas reflete esse endereço e não inicia processo nenhum.
-
-const TUNNEL_PROVIDERS = {
-  cloudflared: {
-    bin: 'cloudflared',
-    envBin: 'CLOUDFLARED_BIN',
-    args: (port) => ['tunnel', '--url', `http://localhost:${port}`, '--no-autoupdate'],
-    urlRe: /(https:\/\/[a-z0-9-]+\.trycloudflare\.com)/i,
-    install: 'winget install --id Cloudflare.cloudflared'
-  },
-  ngrok: {
-    bin: 'ngrok',
-    envBin: 'NGROK_BIN',
-    args: (port) => ['http', String(port), '--log=stdout'],
-    urlRe: /url=(https:\/\/[a-z0-9-]+\.ngrok[-a-z0-9]*(?:\.app|\.dev|\.io))/i,
-    install: 'winget install --id Ngrok.Ngrok'
-  }
-};
-
-let tunnel = { status: 'stopped', provider: null, url: null, error: null, proc: null };
-
-// Permite apontar o binário por variável de ambiente (instalação fora do PATH),
-// como o OPENSSL_BIN do `npm run cert`.
-function tunnelBin(provider) {
-  return process.env[provider.envBin] || provider.bin;
-}
-
-function binExists(bin) {
-  if (/[\\/]/.test(bin)) return existsSync(bin); // caminho explícito (override)
-  const probe = process.platform === 'win32' ? 'where' : 'which';
-  const r = spawnSync(probe, [bin], { encoding: 'utf8' });
-  return r.status === 0 && String(r.stdout || '').trim().length > 0;
-}
-
-function tunnelProviderAvailable() {
-  for (const id of Object.keys(TUNNEL_PROVIDERS)) {
-    if (binExists(tunnelBin(TUNNEL_PROVIDERS[id]))) return id;
-  }
-  return null;
-}
-
-function killTunnelProc() {
-  const proc = tunnel.proc;
-  tunnel.proc = null;
-  if (!proc) return;
-  try {
-    if (process.platform === 'win32') spawnSync('taskkill', ['/pid', String(proc.pid), '/T', '/F'], { stdio: 'ignore' });
-    else proc.kill('SIGTERM');
-  } catch { /* ignore */ }
-}
-
-function stopTunnel() {
-  killTunnelProc();
-  tunnel = { status: 'stopped', provider: null, url: null, error: null, proc: null };
-}
-
-function startTunnel() {
-  return new Promise((resolve) => {
-    // 1) Túnel externo já configurado via PUBLIC_URL — só reflete.
-    if (PUBLIC_URL) {
-      tunnel = { status: 'running', provider: 'public-url', url: PUBLIC_URL, error: null, proc: null };
-      return resolve(tunnel);
-    }
-    // 2) Já tem um túnel nosso rodando.
-    if (tunnel.status === 'running' && tunnel.url) return resolve(tunnel);
-
-    killTunnelProc();
-    const providerId = tunnelProviderAvailable();
-    if (!providerId) {
-      tunnel = {
-        status: 'unavailable', provider: null, url: null, proc: null,
-        error: 'Nenhum túnel instalado. Instale o cloudflared: ' + TUNNEL_PROVIDERS.cloudflared.install
-      };
-      return resolve(tunnel);
-    }
-
-    const provider = TUNNEL_PROVIDERS[providerId];
-    const proc = spawn(tunnelBin(provider), provider.args(config.httpPort), { stdio: ['ignore', 'pipe', 'pipe'] });
-    tunnel = { status: 'starting', provider: providerId, url: null, error: null, proc };
-
-    let out = '';
-    let done = false;
-    let timer = null;
-    const finish = (url, error) => {
-      if (done) return;
-      done = true;
-      if (timer) clearTimeout(timer);
-      if (url) {
-        tunnel.status = 'running';
-        tunnel.url = url;
-        tunnel.error = null;
-        console.log(`[TUNNEL] Público em ${url} (${providerId})`);
-      } else {
-        killTunnelProc();
-        tunnel = { status: 'error', provider: providerId, url: null, proc: null, error: error || 'Falha ao criar o túnel.' };
-        console.warn('[TUNNEL] ' + tunnel.error);
-      }
-      resolve(tunnel);
-    };
-    const onData = (d) => {
-      out += String(d);
-      const m = provider.urlRe.exec(out);
-      if (m) finish((m[1] || m[0]).replace(/\/+$/, ''));
-    };
-    proc.stdout.on('data', onData);
-    proc.stderr.on('data', onData);
-    proc.on('error', (e) => finish(null, e.message));
-    proc.on('exit', (code) => finish(null, `${providerId} encerrou (código ${code}).`));
-    timer = setTimeout(() => finish(null, 'Tempo esgotado ao criar o túnel (o binário pode precisar de login/config).'), 20000);
-  });
-}
-
-// Estado efetivo do túnel: PUBLIC_URL (túnel externo) tem prioridade e conta
-// como "running" mesmo sem termos subido processo.
-function tunnelState() {
-  if (PUBLIC_URL) return { status: 'running', provider: 'public-url', url: PUBLIC_URL, error: null };
-  return { status: tunnel.status, provider: tunnel.provider, url: tunnel.url || null, error: tunnel.error };
-}
-
-// Estado do túnel (o painel 🌐 Servidor usa isto ao abrir).
-app.get('/api/tunnel', (req, res) => {
-  res.json({
-    ...tunnelState(),
-    available: !!PUBLIC_URL || !!tunnelProviderAvailable(),
-    install: TUNNEL_PROVIDERS.cloudflared.install
-  });
-});
-
-app.post('/api/tunnel/start', async (req, res) => {
-  const t = await startTunnel();
-  res.json({ status: t.status, provider: t.provider, url: PUBLIC_URL || t.url || null, error: t.error });
-});
-
-app.post('/api/tunnel/stop', (req, res) => {
-  stopTunnel();
-  res.json({ status: 'stopped', url: null, error: null });
-});
-
 // ==================== HTTPS (opcional, p/ PSP e DOS) ====================
 // PSP (PPSSPP) e DOS (DOSBox Pure) só têm build *threaded* no EmulatorJS e,
 // portanto, exigem SharedArrayBuffer — que o navegador libera apenas em
@@ -1615,7 +1208,6 @@ async function start() {
 // Graceful shutdown
 process.on('SIGINT', async () => {
   console.log('\n[SERVER] Encerrando...');
-  stopTunnel();
   for (const storage of storages.values()) storage.stopAutoScan();
   if (httpsServer) {
     try { httpsServer.close(); } catch { /* ignore */ }
