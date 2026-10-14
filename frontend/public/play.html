@@ -359,6 +359,7 @@
   </div>
   <p class="hint" id="server-status">Usando o servidor desta página.</p>
   <p class="hint">De outro aparelho: <span id="lan-url" class="lan-url">—</span></p>
+  <p class="hint" id="lan-https-hint" style="display:none">Para <b>PSP/DOS</b> (exigem contexto seguro): <a id="lan-https" href="#" class="lan-url" target="_blank" rel="noopener">—</a> <span style="opacity:.7">— o navegador avisa que o certificado é autoassinado; é só aceitar/continuar.</span></p>
 
   <div class="row" style="margin-top:12px">
     <button id="btn-discover" class="btn sm" type="button">🔍 Buscar servidores na rede</button>
@@ -762,6 +763,7 @@
   var currentSystem = null;
   var netplayAvailable = false;   // o servidor desta página tem signaling (netplay LAN)?
   var serverLanUrl = '';          // ex.: http://192.168.0.5:3000 (para montar o link da sala)
+  var serverLanHttpsUrl = '';     // ex.: https://192.168.0.5:3443 (contexto seguro p/ PSP/DOS)
   var serverPublicUrl = '';       // URL pública (túnel) configurada no backend, se houver
   var serverWsUrl = '';           // sinalizador online informado pelo backend (/api/health → ws)
 
@@ -790,6 +792,15 @@
     }
   }
 
+  // Endereço sugerido em HTTPS do mesmo host (para o caso Mixed Content): troca
+  // o esquema e, se a porta for a padrão HTTP (3000), usa a padrão HTTPS (3443).
+  function httpsVariantOf(base) {
+    var m = /^http:\/\/([^\/:]+)(?::(\d+))?/i.exec(base || '');
+    if (!m) return '';
+    var port = (!m[2] || m[2] === '3000') ? '3443' : m[2];
+    return 'https://' + m[1] + ':' + port;
+  }
+
   function api(path, opts) {
     var url = getApiBase() + path;
     if (accessToken) url += (url.includes('?') ? '&' : '?') + 'token=' + encodeURIComponent(accessToken);
@@ -815,12 +826,24 @@
       backendOk = true;
       netplayAvailable = !!j.netplay;
       if (j.lanUrl) serverLanUrl = j.lanUrl;
+      if (j.lanHttpsUrl) serverLanHttpsUrl = j.lanHttpsUrl;
       if (j.publicUrl) serverPublicUrl = j.publicUrl;
       if (j.ws) serverWsUrl = j.ws;
       loadIceServers();
       el('backend-badge').className = 'badge ok';
       el('backend-badge').innerHTML = '<span class="dot"></span> Servidor online';
       if (j.lanUrl) el('lan-url').textContent = j.lanUrl + '/play.html';
+      var httpsHint = el('lan-https-hint');
+      if (httpsHint) {
+        if (j.lanHttpsUrl) {
+          var httpsLink = el('lan-https');
+          httpsLink.href = j.lanHttpsUrl + '/play.html';
+          httpsLink.textContent = j.lanHttpsUrl + '/play.html';
+          httpsHint.style.display = '';
+        } else {
+          httpsHint.style.display = 'none';
+        }
+      }
       updateServerStatus();
       return j;
     }).catch(function (e) {
@@ -856,9 +879,19 @@
     var isHttp = /^http:/i.test(base);
     var isLocal = /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/i.test(base);
     if (location.protocol === 'https:' && isHttp && !isLocal) {
+      // Caminho 1: abrir a própria página do PC (same-origin, sem bloqueio).
       var aviso = 'De um site <b>HTTPS</b> o navegador <b>bloqueia</b> a conexão com seu PC em <b>HTTP</b> (Mixed Content).<br>' +
         'Abra o endereço do PC diretamente: <a href="' + escapeHtml(base) + '/play.html" target="_blank" rel="noopener"><b>' +
         escapeHtml(base) + '/play.html</b></a>';
+      // Caminho 2: se o PC também tem HTTPS (cert em certs/), use a porta 3443 —
+      // aí é HTTPS->HTTPS e o navegador deixa passar (aceite o certificado).
+      var httpsSug = serverLanHttpsUrl || httpsVariantOf(base);
+      if (httpsSug) {
+        aviso += '<br>Ou use o <b>HTTPS</b> do PC (mesma rede): <a href="' + escapeHtml(httpsSug) +
+          '/play.html" target="_blank" rel="noopener"><b>' + escapeHtml(httpsSug) + '/play.html</b></a> (aceite o aviso de certificado).';
+      } else {
+        aviso += '<br>Para usar o <b>HTTPS</b> do PC, gere o certificado (<code>npm run cert</code>) e reabra o servidor.';
+      }
       if (el('server-status')) el('server-status').innerHTML = '<span class="err">●</span> ' + aviso;
       toast(aviso, 'warn', 14000);
     }

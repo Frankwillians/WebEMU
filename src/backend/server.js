@@ -249,6 +249,17 @@ const app = express();
 const httpServer = createServer(app);
 
 // Middlewares
+// Private Network Access (Chrome): uma página pública (HTTPS, ex.: Vercel) que
+// chama a API num IP privado (LAN) sofre um preflight com
+// `Access-Control-Request-Private-Network`. Sem este cabeçalho o navegador
+// bloqueia a chamada. Isto NÃO resolve Mixed Content (HTTPS -> HTTP), que é
+// outro bloqueio — por isso o servidor HTTPS local (`npm run cert`) importa.
+app.use((req, res, next) => {
+  if (req.headers['access-control-request-private-network'] === 'true') {
+    res.setHeader('Access-Control-Allow-Private-Network', 'true');
+  }
+  next();
+});
 app.use(cors({
   origin: config.corsOrigin,
   // Necessário para que o EmulatorJS consiga ler tamanho/range dos arquivos
@@ -317,7 +328,8 @@ app.get('/api/health', (req, res) => {
     ws: wsUrl,
     publicUrl: PUBLIC_URL || null,
     lanIP,
-    lanUrl: `http://${lanIP}:${config.httpPort}`
+    lanUrl: `http://${lanIP}:${config.httpPort}`,
+    lanHttpsUrl: httpsServer ? `https://${lanIP}:${config.httpsPort}` : null
   });
 });
 
@@ -768,6 +780,7 @@ app.get('/api/config', (req, res) => {
     httpPort: config.httpPort,
     lanIP,
     lanUrl: `http://${lanIP}:${config.httpPort}`,
+    lanHttpsUrl: httpsServer ? `https://${lanIP}:${config.httpsPort}` : null,
     settingsFile: settingsPath,
     gamesIndexed: gameStorage.cache.size,
     ps2Indexed: ps2Storage.cache.size,

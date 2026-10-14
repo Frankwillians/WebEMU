@@ -229,9 +229,22 @@ Assim o mesmo site pode apontar para qualquer computador que esteja servindo
 uma pasta de jogos.
 
 > ⚠️ **Página HTTPS (Vercel) → servidor HTTP da rede:** o navegador bloqueia
-> esse pedido (Mixed Content). Para jogar pelos arquivos do PC, **abra o próprio
-> endereço do PC** (`http://IP:3000/play.html`), que carrega a página do servidor
-> local (HTTP, sem bloqueio). Um túnel HTTPS também funciona.
+> esse pedido (Mixed Content) — não é algo que um cabeçalho resolva. Caminhos
+> válidos:
+>
+> 1. **Abrir a própria página do PC** — `http://IP:3000/play.html` (same-origin,
+>    sem bloqueio).
+> 2. **Usar o HTTPS do PC** — rode `npm run cert` (gera `certs/`, já com o IP da
+>    LAN no certificado) e reabra o servidor; aí abra
+>    `https://IP:3443/play.html` (aceite o aviso de certificado autoassinado).
+>    É HTTPS→HTTPS, então funciona também a partir da página da Vercel, e dá o
+>    **contexto seguro** que PSP/DOS exigem.
+> 3. **Túnel HTTPS** (`cloudflared`/`ngrok`/Tailscale) — ver abaixo.
+> 4. Na **mesma máquina**, `http://localhost:3000` é isento de Mixed Content.
+
+> 🔒 Para o navegador deixar uma página **pública** chamar a API num **IP
+> privado**, o servidor responde o preflight **Private Network Access**
+> (`Access-Control-Allow-Private-Network: true`). Isso é automático.
 
 ### Descobrir servidores na rede (automático)
 

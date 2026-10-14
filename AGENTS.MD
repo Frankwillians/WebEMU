@@ -346,6 +346,16 @@ Mensagens do sinalizador (`src/backend/signaling.js`): `join`, `leave`, `offer`,
     Uma página HTTPS **não** consegue falar direto com API HTTP da LAN
     (`/api/health`, `/api/discover`, `/api/systems`): o navegador bloqueia. Para
     jogar pelos arquivos do PC, abra o próprio `http://IP:3000/play.html`.
+    **Ponte HTTPS↔HTTP (caminhos válidos):** (a) abrir a própria página do PC
+    (same-origin); (b) o PC servir **HTTPS** — `npm run cert` gera `certs/` com
+    **o IP da LAN no SAN** (senão dá erro de nome) e o servidor sobe `:3443`;
+    aí é HTTPS→HTTPS (aceite o certificado autoassinado) — `/api/health`
+    devolve `lanHttpsUrl` e a UI mostra o atalho; (c) túnel HTTPS
+    (`cloudflared`/`ngrok`/Tailscale) — `PUBLIC_URL` nos links de convite;
+    (d) `http://localhost:3000` na mesma máquina (isento de Mixed Content).
+    Navegador **público→privado** (Vercel→LAN) também exige responder o
+    preflight **Private Network Access** com `Access-Control-Allow-Private-Network:
+    true` (feito no `server.js`); isso **não** contorna Mixed Content.
 10b. **Base da API (`ps1emu.apiBase`) é STRING crua.** `setApiBase` grava string
     e `getApiBase` lê string (com `normalizarBase` para aceitar `IP:porta`).
     **Nunca** leia essa chave com `readJSON`/`JSON.parse`: era exatamente o bug
@@ -469,6 +479,7 @@ resultado **verificável** (teste/validação) antes de considerar pronto.
 | PSP/DOS não iniciam no celular | Falta contexto seguro + COOP/COEP (`npm run cert`, HTTPS) |
 | 404 na Vercel em rotas multi-segmento | Smart-join de `req.query['...all']` em `api/[...all].js` |
 | Capa/ROM bloqueada no Vercel | Mixed Content: use `/api/cover`, `/api/rom` (`precisaProxy()`) |
+| Conectar do site HTTPS ao PC da LAN | **Mixed Content** (bloqueio do navegador, não é header). Abra `http://IP:3000/play.html` ou o **HTTPS** do PC (`npm run cert` → `https://IP:3443`, aceite o certificado); o preflight **PNA** já é respondido. Sem `certs/`, `lanHttpsUrl` é `null` |
 | "Conectado a https://web-emu.vercel.app" ao digitar um IP | `getApiBase` lendo a base com `JSON.parse` (gravada crua) — leia string crua; `normalizarBase` |
 | Não acha servidores na rede | Base da API errada (vira o site) ou página HTTPS varrendo a nuvem; conecte antes ao PC (`http://IP:3000`) |
 | Busca de servidores muito lenta | Scan varrendo sub-redes virtuais; pular faixas de VM e limitar por orçamento/concorrência |
