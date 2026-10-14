@@ -694,6 +694,11 @@ app.get('/api/bios', async (req, res) => {
     const bios = await biosStorage.list();
     res.json({ bios, count: bios.length, known: Object.keys(KNOWN_BIOS) });
   } catch (error) {
+    // Na Vercel (serverless, sem disco) não há pasta de BIOS: responde vazio em
+    // vez de estourar 500 e sujar o console de quem está só usando a central.
+    if (process.env.VERCEL) {
+      return res.json({ bios: [], count: 0, known: Object.keys(KNOWN_BIOS), storage: 'indisponível (serverless)' });
+    }
     console.error('[API] Erro ao listar BIOS:', error);
     res.status(500).json({ error: 'Falha ao listar BIOS' });
   }

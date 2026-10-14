@@ -678,7 +678,9 @@
       .then(function () {
         refreshBiosUI();
         toast('Conectado a <b>' + escapeHtml(serverLabel()) + '</b>', 'info');
-        el('server-panel').classList.add('hidden');
+        // NÃO escondemos o painel: ele serve justamente para o jogador continuar
+        // buscando outros PCs/pastas na rede e trocar de servidor quando quiser.
+        // Quem fecha é o botão "🌐 Servidor".
       })
       .catch(function (e) {
         toast('Não foi possível conectar em <b>' + escapeHtml(v) + '</b>.<br>Confira se o endereço está certo e se o PC do host está ligado.', 'err');
