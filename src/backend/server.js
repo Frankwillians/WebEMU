@@ -325,24 +325,6 @@ app.get('/api/netplay/ice', (req, res) => {
   res.json({ iceServers: iceServers() });
 });
 
-// Diagnóstico: mostra EXATAMENTE o caminho/parâmetros que chegaram ao Express
-// e o que a última requisição (mesmo que 404) entregou ao adaptador serverless.
-// Usado para depurar o roteamento da Vercel.
-app.get('/api/debug', (req, res) => {
-  res.json({
-    reqUrl: req.url,
-    originalUrl: req.originalUrl,
-    params: req.params,
-    query: req.query,
-    lastReqSeen: globalThis.__webemuLastReq || null,
-    vercel: {
-      VERCEL_URL: process.env.VERCEL_URL || null,
-      VERCEL_ENV: process.env.VERCEL_ENV || null,
-      isVercel: !!process.env.VERCEL
-    }
-  });
-});
-
 // ==================== DESCOBERTA DE SERVIDORES NA REDE ====================
 //
 // Varre as sub-redes locais (/24) procurando outras instâncias do WebEMU
@@ -1291,47 +1273,6 @@ app.use(express.static(staticDir, {
   maxAge: '1h',
   etag: true
 }));
-
-// SPA fallback - serve index.html para rotas não-API
-app.get('*', (req, res, next) => {
-  if (
-    req.path.startsWith('/api/') ||
-    req.path.startsWith('/signaling') ||
-    req.path.startsWith('/bios/') ||
-    req.path.startsWith('/roms/') ||
-    req.path.startsWith('/ps2roms/') ||
-    req.path.startsWith('/recomp/') ||
-    req.path === '/recomp' ||
-    req.path.startsWith('/disc/') ||
-    req.path === '/disc' ||
-    req.path === '/ps2' ||
-    req.path.startsWith('/ps2/')
-  ) {
-    return next();
-  }
-  res.sendFile(join(staticDir, 'index.html'), (err) => {
-    if (err) {
-      // Em desenvolvimento, o frontend é servido pelo Vite dev server
-      if (process.env.NODE_ENV !== 'production') {
-        res.status(404).send(`
-          <html><body style="font-family:sans-serif;padding:2rem">
-            <h1>PS1 Emulator - Backend Running</h1>
-            <p>Frontend deve ser acessado via <code>npm run dev:frontend</code> (porta 5173)</p>
-            <h2>API Endpoints:</h2>
-            <ul>
-              <li><a href="/api/health">GET /api/health</a></li>
-              <li><a href="/api/games">GET /api/games</a></li>
-            </ul>
-            <h2>WebSocket Signaling:</h2>
-            <p>ws://localhost:${config.httpPort}/signaling</p>
-          </body></html>
-        `);
-      } else {
-        next(err);
-      }
-    }
-  });
-});
 
 // ==================== WEBSOCKET SIGNALING ====================
 // WebSocket não existe em funções serverless (Vercel), então só monta o

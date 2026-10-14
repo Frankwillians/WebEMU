@@ -40,9 +40,6 @@ export const config = {
   // (HTTPS ou localhost) + cross-origin isolation.
   httpsPort: parseInt(process.env.HTTPS_PORT || '3443', 10),
 
-  // Porta do WebSocket Signaling Server (mantida por compatibilidade)
-  wsPort: parseInt(process.env.WS_PORT || '8080', 10),
-
   // Diretório das ROMs/ISOs do PS1 (absoluto).
   // Pode ser trocado em tempo de execução pela API (/api/config).
   gamesDir: abs(process.env.GAMES_DIR || 'games'),

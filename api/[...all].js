@@ -6,7 +6,7 @@
  * `server.js` (que só chama `app.listen` quando NÃO está na Vercel).
  *
  * ---------------------------------------------------------------- CORREÇÃO ---
- * Descoberto na prática (rota /api/debug): a Vercel entrega o "resto" do caminho
+ * Descoberto na prática: a Vercel entrega o "resto" do caminho
  * como um PARÂMETRO DE QUERY chamado "...all" — com os três pontos! Ou seja:
  *
  *   GET /api/netplay/ice          →  req.url = "/api/netplay?...all=ice"
@@ -22,13 +22,6 @@
 import app from '../src/backend/server.js';
 
 export default function handler(req, res) {
-  try {
-    globalThis.__webemuLastReq = {
-      url: req.url,
-      at: new Date().toISOString()
-    };
-  } catch { /* ignora */ }
-
   try {
     const q = req.query || {};
     // A Vercel usa "...all" (com pontos). Mantemos "all" como fallback.

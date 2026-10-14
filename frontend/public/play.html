@@ -652,7 +652,6 @@
     apiBase: 'ps1emu.apiBase',
     cores: 'ps1emu.cores',
     modes: 'ps1emu.modes',
-    legacyCore: 'ps1emu.core',
     romProxy: 'ps1emu.romProxy',
     npName: 'ps1emu.npName',
     npWsMode: 'ps1emu.npWsMode',
@@ -862,7 +861,6 @@
   function getCoreFor(sys) {
     var map = readJSON(LS.cores) || {};
     if (map[sys.id]) return map[sys.id];
-    if (sys.id === 'ps1') { var legacy = readJSON(LS.legacyCore); if (legacy) return legacy; }
     return sys.defaultCore || (sys.cores && sys.cores[0] && sys.cores[0].id) || null;
   }
   function setCoreFor(sys, core) {
