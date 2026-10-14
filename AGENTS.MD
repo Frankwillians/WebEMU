@@ -362,8 +362,20 @@ Mensagens do sinalizador (`src/backend/signaling.js`): `join`, `leave`, `offer`,
    estado local (`NP.peers`, `roomId`, `remoteStream`, `streamVersion`).
 8. **1 controle por pessoa:** cada jogador escolhe o seu gamepad físico
    (`NP_GP.gamepadIndex`, salvo em `localStorage['np_gamepad_idx']`). O loop usa
-   **apenas** o gamepad selecionado. Host aplica input local com
-   `simulateInput(0, idx, val)`; convidado envia pela rede com `player: NP.myPlayerIndex`.
+   **apenas** o gamepad selecionado. `npSendInput(idx, val)` é o **único**
+   caminho de input: solo/host aplica local (`simulateInput(NP.myPlayerIndex ||
+   0, idx, val)`); convidado envia pela rede com `player: NP.myPlayerIndex`.
+   Como o convidado não emula, o mesmo caminho serve para todos.
+   - **Controles na tela (`np-pad`) valem em solo, host e convidado.** O
+     `npBuildPad` monta um **joystick analógico** (esquerda) + botões (direita),
+     mostrado automaticamente em aparelho de toque (`npEhToque()`, persistido em
+     `np_pad`). O stick emite **os dois** formatos: analógico esquerdo do
+     EmulatorJS (`simulateInput` com os índices 16/17 = X+/X- e 18/19 = Y+/Y-,
+     valor 0..32767) **e** o D-pad digital (4=cima, 5=baixo, 6=esquerda,
+     7=direita) — assim funciona em **todos** os consoles (os sem analógico usam
+     só o digital). O gamepad nativo do EmulatorJS é **escondido por CSS**
+     (`.ejs_virtualGamepad_parent`) para não sobrepor nem duplicar toques; os
+     índices analógicos seguem a tabela padrão do EmulatorJS (`16..23`).
 9. **Dois sinalizadores:** 🏠 LAN (`/signaling`) e 🌐 Online (`/api/ws`). O link de
    convite carrega `?room=`, `?server=` e `?ws=` para o convidado conectar sozinho.
 10. **Mixed Content:** em HTTPS (Vercel), ROMs vindas de HTTP local passam por
@@ -528,6 +540,7 @@ resultado **verificável** (teste/validação) antes de considerar pronto.
 | Clique duplo no convite cria "Player 2" | Token de sessão (`np_session_token`) + `resumed` |
 | Dois peers do mesmo IP | Anti-clone por IP (sem token) |
 | Lobby some na Vercel | Funções serverless não compartilham memória — limitação conhecida |
+| Controle na tela não responde (mobile) | `npSendInput` precisa aplicar local em solo/host (não só em sala). O stick emite analógico (16-19) **e** digital (4-7); sem analógico no core, o digital mantém o controle funcionando. O gamepad nativo do EmulatorJS é escondido por CSS para não duplicar |
 | Push "falha" no PowerShell | stderr do git; confirme `a..b master -> master` |
 
 ---

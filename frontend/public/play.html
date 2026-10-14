@@ -235,7 +235,6 @@
     .np-center { display: flex; flex-direction: row; justify-content: center; align-items: center; gap: 20px; }
     .np-pad-row { display: flex; justify-content: space-between; align-items: flex-end; gap: 12px; width: 100%; pointer-events: none; }
     .np-pad-row > * { pointer-events: auto; }
-    .np-dpad { display: grid; grid-template-columns: repeat(3, var(--np-btn)); grid-template-rows: repeat(3, var(--np-btn)); gap: 5px; }
     .np-cluster { display: grid; grid-template-columns: repeat(2, var(--np-btn)); grid-auto-rows: var(--np-btn); gap: 9px; }
     .np-btn {
       border: 1px solid #3a4d6b; color: #eaf1ff;
@@ -255,6 +254,35 @@
       box-shadow: 0 0 16px rgba(59,130,246,.7), inset 0 1px 0 rgba(255,255,255,.25);
     }
     .np-pill { padding: 10px 18px; border-radius: 999px; font-size: 11px; }
+    .np-stick {
+      position: relative;
+      width: clamp(78px, 20vw, 104px);
+      height: clamp(78px, 20vw, 104px);
+      border-radius: 50%;
+      background: radial-gradient(circle at 50% 40%, rgba(255,255,255,.08), rgba(19,28,44,.96));
+      border: 1px solid #3a4d6b;
+      box-shadow: 0 4px 0 rgba(0,0,0,.45), inset 0 1px 0 rgba(255,255,255,.08);
+      touch-action: none;
+      user-select: none;
+      -webkit-user-select: none;
+      -webkit-touch-callout: none;
+    }
+    .np-stick-knob {
+      position: absolute;
+      left: 50%; top: 50%;
+      width: clamp(44px, 10.5vw, 58px);
+      height: clamp(44px, 10.5vw, 58px);
+      border-radius: 50%;
+      transform: translate(-50%, -50%);
+      background: radial-gradient(circle at 50% 40%, #5b7fa3, #1f334d);
+      border: 1px solid #7ea3c9;
+      box-shadow: 0 3px 0 rgba(0,0,0,.45), inset 0 1px 0 rgba(255,255,255,.25);
+      will-change: transform;
+    }
+    /* O EmulatorJS traz um gamepad virtual próprio (canto inferior). O WebEMU tem
+       o seu (np-pad), que também funciona no netplay e tem analógico — escondemos
+       o nativo para não sobrepor nem capturar toques fora dos nossos botões. */
+    .ejs_virtualGamepad_parent { display: none !important; }
 
     /* ---------- tela cheia ---------- */
     /* Botão para sair (aparece em qualquer modo de tela cheia). */
@@ -308,6 +336,8 @@
       }
       .np-center { gap: 14px; }
       .np-pill { padding: 9px 14px; }
+      .np-stick { width: clamp(74px, 17vw, 94px); height: clamp(74px, 17vw, 94px); }
+      .np-stick-knob { width: clamp(40px, 9.5vw, 54px); height: clamp(40px, 9.5vw, 54px); }
       .toasts { right: 10px; left: 10px; bottom: calc(10px + env(safe-area-inset-bottom)); max-width: none; }
       .list { max-height: 220px; }
       .panel { margin: 10px 8px; padding: 12px; }
@@ -324,6 +354,8 @@
       .np-pad { --np-btn: clamp(40px, 9vh, 52px); gap: 6px; padding: 8px 12px; }
       .np-center { gap: 12px; }
       .np-pill { padding: 7px 12px; font-size: 10px; }
+      .np-stick { width: clamp(64px, 14vh, 82px); height: clamp(64px, 14vh, 82px); }
+      .np-stick-knob { width: clamp(36px, 8vh, 46px); height: clamp(36px, 8vh, 46px); }
     }
   </style>
 </head>
@@ -2888,13 +2920,13 @@
     center.appendChild(npPadButton('SELECT', 2, 'np-pill'));
     center.appendChild(npPadButton('START', 3, 'np-pill'));
 
-    var dpad = document.createElement('div');
-    dpad.className = 'np-dpad';
-    [
-      null, npPadButton('▲', 4, 'round'), null,
-      npPadButton('◀', 6, 'round'), null, npPadButton('▶', 7, 'round'),
-      null, npPadButton('▼', 5, 'round'), null
-    ].forEach(function (c) { dpad.appendChild(c || document.createElement('div')); });
+    var stick = document.createElement('div');
+    stick.className = 'np-stick';
+    stick.id = 'np-stick';
+    var knob = document.createElement('div');
+    knob.className = 'np-stick-knob';
+    stick.appendChild(knob);
+    npStickInit(stick, knob);
 
     var cluster = document.createElement('div');
     cluster.className = 'np-cluster';
@@ -2906,12 +2938,159 @@
 
     var row = document.createElement('div');
     row.className = 'np-pad-row';
-    row.appendChild(dpad);
+    row.appendChild(stick);
     row.appendChild(cluster);
 
     pad.appendChild(center);
     pad.appendChild(row);
     wrap.appendChild(pad);
+  }
+
+  function npAnalogAxis(negIndex, posIndex, v) {
+    if (v > 0.01) {
+      var val = Math.round(Math.min(v, 1) * 32767);
+      npSendInput(posIndex, val);
+      npSendInput(negIndex, 0);
+    } else if (v < -0.01) {
+      var val2 = Math.round(Math.min(-v, 1) * 32767);
+      npSendInput(posIndex, 0);
+      npSendInput(negIndex, val2);
+    } else {
+      npSendInput(posIndex, 0);
+      npSendInput(negIndex, 0);
+    }
+  }
+
+  var NP_STICK = {
+    base: null,
+    knob: null,
+    active: false,
+    ptrId: -1,
+    cx: 0, cy: 0, r: 0,
+    ax: 0, ay: 0,
+    lastAx: 999, lastAy: 999,
+    lastDx: 999, lastDy: 999,
+    dead: 0.18,
+    timer: null,
+    dirty: false
+  };
+
+  function npStickUpdateAnalog() {
+    NP_STICK.dirty = false;
+    var ax = NP_STICK.ax;
+    var ay = NP_STICK.ay;
+    if (Math.abs(ax - NP_STICK.lastAx) < 0.005 && Math.abs(ay - NP_STICK.lastAy) < 0.005) return;
+    NP_STICK.lastAx = ax;
+    NP_STICK.lastAy = ay;
+    npAnalogAxis(17, 16, ax);
+    npAnalogAxis(19, 18, ay);
+    var dx = 0, dy = 0;
+    if (Math.abs(ax) > NP_STICK.dead) dx = ax > 0 ? 1 : -1;
+    if (Math.abs(ay) > NP_STICK.dead) dy = ay > 0 ? 1 : -1;
+    if (dx !== NP_STICK.lastDx || dy !== NP_STICK.lastDy) {
+      if (NP_STICK.lastDx !== 999 || NP_STICK.lastDy !== 999) {
+        if (NP_STICK.lastDx === 1) npSendInput(7, 0);
+        if (NP_STICK.lastDx === -1) npSendInput(6, 0);
+        if (NP_STICK.lastDy === 1) npSendInput(5, 0);
+        if (NP_STICK.lastDy === -1) npSendInput(4, 0);
+      }
+      if (dx === 1) npSendInput(7, 1);
+      if (dx === -1) npSendInput(6, 1);
+      if (dy === 1) npSendInput(5, 1);
+      if (dy === -1) npSendInput(4, 1);
+      NP_STICK.lastDx = dx;
+      NP_STICK.lastDy = dy;
+    }
+  }
+
+  function npStickApply(nx, ny) {
+    NP_STICK.ax = nx;
+    NP_STICK.ay = ny;
+    var maxR = NP_STICK.r * 0.72;
+    if (NP_STICK.knob) {
+      NP_STICK.knob.style.transform =
+        'translate(calc(-50% + ' + (nx * maxR) + 'px), calc(-50% + ' + (ny * maxR) + 'px))';
+    }
+    if (!NP_STICK.dirty) {
+      NP_STICK.dirty = true;
+      NP_STICK.timer = requestAnimationFrame(npStickUpdateAnalog);
+    }
+  }
+
+  function npStickReset() {
+    NP_STICK.active = false;
+    NP_STICK.ptrId = -1;
+    NP_STICK.ax = 0; NP_STICK.ay = 0;
+    if (NP_STICK.knob) NP_STICK.knob.style.transform = 'translate(-50%, -50%)';
+    if (NP_STICK.dirty) {
+      NP_STICK.dirty = false;
+      cancelAnimationFrame(NP_STICK.timer);
+    }
+    npAnalogAxis(17, 16, 0);
+    npAnalogAxis(19, 18, 0);
+    npSendInput(4, 0); npSendInput(5, 0);
+    npSendInput(6, 0); npSendInput(7, 0);
+    NP_STICK.lastAx = 999; NP_STICK.lastAy = 999;
+    NP_STICK.lastDx = 999; NP_STICK.lastDy = 999;
+  }
+
+  // Coordenadas do toque/mouse (Pointer Events têm clientX; TouchEvent não).
+  function npStickCoords(ev) {
+    if (ev.touches && ev.touches[0]) return { x: ev.touches[0].clientX, y: ev.touches[0].clientY };
+    if (ev.changedTouches && ev.changedTouches[0]) return { x: ev.changedTouches[0].clientX, y: ev.changedTouches[0].clientY };
+    return { x: ev.clientX, y: ev.clientY };
+  }
+
+  function npStickHandleDown(ev) {
+    if (ev.preventDefault) ev.preventDefault();
+    var base = NP_STICK.base;
+    if (!base) return;
+    var rect = base.getBoundingClientRect();
+    NP_STICK.cx = rect.left + rect.width / 2;
+    NP_STICK.cy = rect.top + rect.height / 2;
+    NP_STICK.r = Math.min(rect.width, rect.height) / 2;
+    NP_STICK.active = true;
+    try {
+      if (base.setPointerCapture && ev.pointerId !== undefined) { base.setPointerCapture(ev.pointerId); NP_STICK.ptrId = ev.pointerId; }
+    } catch (e) {}
+    npStickHandleMove(ev);
+  }
+
+  function npStickHandleMove(ev) {
+    if (!NP_STICK.active) return;
+    if (ev.preventDefault) ev.preventDefault();
+    var c = npStickCoords(ev);
+    var dx = c.x - NP_STICK.cx;
+    var dy = c.y - NP_STICK.cy;
+    var max = NP_STICK.r || 1;
+    var len = Math.sqrt(dx * dx + dy * dy);
+    // Limita o dedo ao círculo do stick, preservando a direção.
+    if (len > max) { dx = dx * max / len; dy = dy * max / len; }
+    npStickApply(Math.max(-1, Math.min(1, dx / max)), Math.max(-1, Math.min(1, dy / max)));
+  }
+
+  function npStickHandleUp(ev) {
+    if (ev.preventDefault) ev.preventDefault();
+    npStickReset();
+  }
+
+  function npStickInit(base, knob) {
+    if (!base || !knob) return;
+    NP_STICK.base = base;
+    NP_STICK.knob = knob;
+    if (window.PointerEvent) {
+      base.addEventListener('pointerdown', npStickHandleDown);
+      base.addEventListener('pointermove', npStickHandleMove);
+      base.addEventListener('pointerup', npStickHandleUp);
+      base.addEventListener('pointercancel', npStickHandleUp);
+      base.addEventListener('lostpointercapture', npStickHandleUp);
+    } else {
+      base.addEventListener('touchstart', npStickHandleDown, { passive: false });
+      base.addEventListener('touchmove', npStickHandleMove, { passive: false });
+      base.addEventListener('touchend', npStickHandleUp, { passive: false });
+      base.addEventListener('touchcancel', npStickHandleUp, { passive: false });
+    }
+    base.addEventListener('contextmenu', function (e) { e.preventDefault(); });
   }
 
   // ---------------------------------------------- mostrar/ocultar controles
@@ -3047,22 +3226,27 @@
         if (Math.abs(val) > self.deadzone && Math.abs(prev) <= self.deadzone) {
           // Direção
           if (idx === 0) { // Left stick X
-            npSendInput(val > 0 ? 7 : 6, 1); // Right / Left
+            var vx = val;
+            if (vx > 0) { npSendInput(16, Math.round(Math.min(vx, 1) * 32767)); npSendInput(17, 0); }
+            else { npSendInput(17, Math.round(Math.min(-vx, 1) * 32767)); npSendInput(16, 0); }
+            if (Math.abs(vx) > self.deadzone) { npSendInput(vx > 0 ? 7 : 6, 1); }
           } else if (idx === 1) { // Left stick Y
-            npSendInput(val > 0 ? 5 : 4, 1); // Down / Up
-          } else if (idx === 2) { // Right stick X (não mapeado)
-            // opcional: C-stick
+            var vy = val;
+            if (vy > 0) { npSendInput(18, Math.round(Math.min(vy, 1) * 32767)); npSendInput(19, 0); }
+            else { npSendInput(19, Math.round(Math.min(-vy, 1) * 32767)); npSendInput(18, 0); }
+            if (Math.abs(vy) > self.deadzone) { npSendInput(vy > 0 ? 5 : 4, 1); }
+          } else if (idx === 2) { // Right stick X
           } else if (idx === 3) { // Right stick Y
           } else if (idx === 4) { // LT analógico
-            if (val > self.deadzone) npSendInput(10, 1); // L (aproxima)
+            if (val > self.deadzone) npSendInput(10, 1); // L
           } else if (idx === 5) { // RT analógico
             if (val > self.deadzone) npSendInput(11, 1); // R
           }
         }
         // Solta quando volta pra deadzone
         if (Math.abs(val) <= self.deadzone && Math.abs(prev) > self.deadzone) {
-          if (idx === 0) { npSendInput(7, 0); npSendInput(6, 0); }
-          else if (idx === 1) { npSendInput(5, 0); npSendInput(4, 0); }
+          if (idx === 0) { npSendInput(7, 0); npSendInput(6, 0); npSendInput(16, 0); npSendInput(17, 0); }
+          else if (idx === 1) { npSendInput(5, 0); npSendInput(4, 0); npSendInput(18, 0); npSendInput(19, 0); }
           else if (idx === 4) { npSendInput(10, 0); }
           else if (idx === 5) { npSendInput(11, 0); }
         }
@@ -3446,18 +3630,19 @@
   //            celular, sem controle físico).
   //  • CONVIDADO → envia pela rede; o host aplica no emulador dele.
   function npSendInput(index, value) {
-    if (NP.isHost) {
-      var emu = window.EJS_emulator;
-      if (emu && emu.gameManager && emu.gameManager.functions && emu.gameManager.functions.simulateInput) {
-        try { emu.gameManager.functions.simulateInput(0, index, value); } catch (e) {}
+    // Convidado numa sala: envia pela rede (host aplica).
+    if (NP.roomId && !NP.isHost) {
+      var msg = JSON.stringify({ player: NP.myPlayerIndex, index: index, value: value });
+      for (var id in NP.peers) {
+        var e = NP.peers[id];
+        if (e && e.dc && e.dc.readyState === 'open') { try { e.dc.send(msg); } catch (err) {} }
       }
       return;
     }
-    if (!NP.roomId) return;
-    var msg = JSON.stringify({ player: NP.myPlayerIndex, index: index, value: value });
-    for (var id in NP.peers) {
-      var e = NP.peers[id];
-      if (e && e.dc && e.dc.readyState === 'open') { try { e.dc.send(msg); } catch (err) {} }
+    // Solo ou host: aplica localmente.
+    var emu = window.EJS_emulator;
+    if (emu && emu.gameManager && emu.gameManager.functions && emu.gameManager.functions.simulateInput) {
+      try { emu.gameManager.functions.simulateInput(NP.myPlayerIndex || 0, index, value); } catch (e) {}
     }
   }
 

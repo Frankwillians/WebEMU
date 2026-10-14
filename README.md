@@ -287,9 +287,10 @@ O botão **👥 Jogar em rede** abre o lobby. O fluxo:
 3. O host **transmite a tela** (o emulador roda nele) e cada convidado aparece
    como um **jogador** (com nome e contagem "X de 4"); o host pode **expulsar**
    quem quiser. Há **chat** simples.
-4. Controles do convidado: **gamepad na tela** (D‑pad, A/B/X/Y, L/R, Start/Select)
-   ou teclado (setas, `Z`=A, `X`=B, `A`=X, `S`=Y, `Enter`=Start, `Shift`=Select,
-   `Q`=L, `R`=R).
+4. Controles do convidado: **joystick na tela** (analógico/direcional, A/B/X/Y,
+   L/R, Start/Select) ou teclado (setas, `Z`=A, `X`=B, `A`=X, `S`=Y, `Enter`=Start,
+   `Shift`=Select, `Q`=L, `R`=R). O mesmo joystick funciona em **solo** (para todo
+   console) e como **analógico** nos consoles que têm stick.
 
 #### Escolha do sinalizador (LAN × Online)
 
@@ -578,6 +579,12 @@ Variáveis: `RECOMP_DIR` (padrão `recomp`) e `PSP_DISC_DIR`
 
 Os controles são configuráveis pelo menu do próprio emulador (ícone de
 engrenagem). Gamepads USB/Bluetooth funcionam automaticamente (Gamepad API).
+
+No **celular/tablet**, aparecem controles na tela: um **joystick** à esquerda
+(analógico e direcional ao mesmo tempo) e os botões de ação à direita. O joystick
+funciona em **solo, host e convidado** e em **todos os consoles**: nos que têm
+analógico (PS1, PSP, N64…) ele vira o stick; nos que só têm direcional (SNES,
+NES, GB…), as direções. Dá para ligar/desligar com o botão 🎮 da barra do player.
 
 | Ação            | Teclado        |
 |-----------------|----------------|
