@@ -464,6 +464,9 @@
     </div>
     <div id="np-players" class="list"></div>
 
+    <!-- Seletor de gamepad (aparece se houver múltiplos controles conectados) -->
+    <div id="np-gp-selector" class="hint" style="margin-top:10px;min-height:18px"></div>
+
     <div class="row" style="margin-top:10px">
       <input id="np-chat-input" class="input" type="text" placeholder="Mensagem para a sala…" spellcheck="false" />
       <button id="btn-np-chat" class="btn sm" type="button">Enviar</button>
@@ -2282,6 +2285,11 @@
     }
     npAtualizarBotaoStream();
     updateNpBadge();
+    // Seletor de gamepad para o jogador atual (aparece se houver >1 conectado)
+    var gpSel = el('np-gp-selector');
+    if (gpSel) {
+      gpSel.innerHTML = NP_GP.mostrarSeletor() || '';
+    }
   }
 
   function npAppendChat(name, text, mine, system) {
@@ -2618,6 +2626,9 @@
     polling: false,
     prevButtons: [],
     prevAxes: [],
+    // Qual gamepad usar (0 = primeiro). Cada jogador escolhe o seu.
+    // Salvo em localStorage: 'np_gamepad_idx'
+    gamepadIndex: 0,
     // RetroArch indices para cada botão padrão do Gamepad (layout Xbox/PS)
     // GP btn -> RA index
     mapBtn: {
@@ -2641,9 +2652,22 @@
     },
     // Deadzone para sticks/analógicos
     deadzone: 0.25,
+    // Carrega preferência salva (por jogador/dispositivo)
+    carregarPref: function () {
+      try {
+        var idx = parseInt(localStorage.getItem('np_gamepad_idx') || '0', 10);
+        this.gamepadIndex = isNaN(idx) ? 0 : Math.max(0, idx);
+      } catch (e) { this.gamepadIndex = 0; }
+    },
+    // Salva preferência
+    salvarPref: function (idx) {
+      this.gamepadIndex = Math.max(0, parseInt(idx, 10) || 0);
+      try { localStorage.setItem('np_gamepad_idx', String(this.gamepadIndex)); } catch (e) {}
+    },
     // Inicia o polling quando entra no jogo (host ou convidado)
     iniciar: function () {
       if (this.polling) return;
+      this.carregarPref();
       this.polling = true;
       this.prevButtons = [];
       this.prevAxes = [];
@@ -2653,12 +2677,34 @@
     loop: function () {
       if (!this.polling) return;
       var gps = navigator.getGamepads ? navigator.getGamepads() : [];
-      for (var i = 0; i < gps.length; i++) {
-        var gp = gps[i];
-        if (!gp) continue;
-        this.processar(gp);
-      }
+      // USA APENAS O GAMEPAD ESCOLHIDO PELO JOGADOR.
+      // Cada navegador = 1 jogador na sala = 1 porta de controle no console.
+      var gp = gps[this.gamepadIndex];
+      if (gp) this.processar(gp);
       requestAnimationFrame(this.loop.bind(this));
+    },
+    // Mostra seletor se houver múltiplos gamepads
+    mostrarSeletor: function () {
+      var gps = navigator.getGamepads ? navigator.getGamepads() : [];
+      var conectados = [];
+      for (var i = 0; i < gps.length; i++) {
+        if (gps[i]) conectados.push({ index: i, id: gps[i].id, buttons: gps[i].buttons.length, axes: gps[i].axes.length });
+      }
+      if (conectados.length <= 1) return null; // não precisa escolher
+      var html = '<div style="padding:12px"><b>🎮 Escolha seu controle</b><br><small>Cada jogador na sala usa um controle diferente (Player 1, 2, 3, 4).</small><br><br>';
+      conectados.forEach(function (gp) {
+        var ativo = gp.index === NP_GP.gamepadIndex ? ' ✅' : '';
+        html += '<button class="btn sm" style="display:block;width:100%;margin:6px 0;text-align:left" onclick="NP_GP.selecionar(' + gp.index + ')">' +
+          (gp.index + 1) + '. ' + (gp.id || 'Controle genérico') + ' (' + gp.buttons + ' botões, ' + gp.axes + ' eixos)' + ativo + '</button>';
+      });
+      html += '</div>';
+      return html;
+    },
+    selecionar: function (idx) {
+      NP_GP.salvarPref(idx);
+      toast('Controle ' + (idx + 1) + ' selecionado para você (Player ' + (NP.myPlayerIndex + 1) + ').', 'ok');
+      var sel = el('np-gp-selector');
+      if (sel) sel.innerHTML = NP_GP.mostrarSeletor() || '';
     },
     processar: function (gp) {
       var self = this;
