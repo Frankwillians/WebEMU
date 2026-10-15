@@ -15,12 +15,17 @@
          linha própria, então um valor fixo (67px) deixava o player com a altura
          errada e a tela do jogo não funcionava. */
       --topbar-h: 67px;
-    [data-theme="batocera"] {
-      --bg: #000000; --bg-2: #05070a; --bg-3: #10141a;
-      --border: #1f2430; --text: #e5e7eb; --muted: #9ca3af;
-      --accent: #06b6d4; --accent-2: #22d3ee;
+    }
+    /* Tema Carbono: visual escuro de fliperama (estilo EmulationStation) —
+       fundo vinho quase preto, ícones claros e destaque vermelho. Paleta:
+       base #8b0000, fundo #200000, grupo #BD4747, info #DDDDDD, barra #8b0000c0. */
+    [data-theme="carbono"] {
+      --bg: #200000; --bg-2: #140000; --bg-3: #2a0d0d;
+      --border: #3a1414; --text: #f0e6e6; --muted: #b9a7a7;
+      --accent: #8b0000; --accent-2: #bd4747;
       --ok: #22c55e; --warn: #f59e0b; --err: #ef4444;
-      --radius: 10px; --shadow: 0 12px 36px rgba(0,0,0,.7);
+      --radius: 6px; --shadow: 0 12px 36px rgba(0,0,0,.7);
+      --bc-base: #8b0000; --bc-group: #bd4747; --bc-info: #dddddd;
     }
     html { -webkit-text-size-adjust: 100%; }
     body {
@@ -30,8 +35,14 @@
       -webkit-tap-highlight-color: transparent;
       overscroll-behavior-y: contain;
     }
-    [data-theme="batocera"] body {
-      background: radial-gradient(1400px 800px at 50% -15%, #15202f 0%, #000 65%);
+    /* Fundo do Carbon: vinho quase preto com textura de fibra de carbono — feita
+       com duas tramas cruzadas, já que o tema original usa uma imagem. */
+    [data-theme="carbono"] body {
+      background:
+        repeating-linear-gradient(45deg, rgba(255,255,255,.022) 0 1px, transparent 1px 4px),
+        repeating-linear-gradient(-45deg, rgba(0,0,0,.34) 0 1px, transparent 1px 4px),
+        radial-gradient(1200px 700px at 50% -12%, #4a0d0d 0%, #200000 60%, #120000 100%);
+      background-attachment: fixed;
     }
     .hidden { display: none !important; }
 
@@ -43,9 +54,9 @@
       background: rgba(16,23,36,.92); backdrop-filter: blur(10px);
       position: sticky; top: 0; z-index: 20;
     }
-    [data-theme="batocera"] .topbar {
-      border-bottom-color: #1f2430;
-      background: rgba(8,10,16,.94);
+    [data-theme="carbono"] .topbar {
+      border-bottom-color: var(--bc-base);
+      background: rgba(14,0,0,.94);
       backdrop-filter: none;
     }
     .brand { display: flex; align-items: center; gap: 10px; min-width: 0; flex: 0 1 auto; }
@@ -73,8 +84,8 @@
       display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600;
       padding: 5px 10px; border-radius: 999px; border: 1px solid #243044; background: #131b28; color: #8b9ab3;
     }
-    [data-theme="batocera"] .badge {
-      border-color: #242a38; background: #10141d; color: #9ca3af;
+    [data-theme="carbono"] .badge {
+      border-color: var(--border); background: #1a0404; color: var(--muted);
     }
     .badge .dot { width: 8px; height: 8px; border-radius: 50%; background: #8b9ab3; }
     .badge.ok { color: #86efac; border-color: #166534; }
@@ -87,9 +98,11 @@
       padding: 9px 14px; border-radius: 10px; font-size: 13px; font-weight: 600;
       border: 1px solid #2b3a52; background: #1b2740; color: #dbe6f6; transition: .15s;
     }
-    [data-theme="batocera"] .btn {
-      border-color: #242a38; background: #141824; color: #e5e7eb;
+    [data-theme="carbono"] .btn {
+      border-color: #4a1a1a; background: #2a0d0d; color: #f0e6e6;
     }
+    [data-theme="carbono"] .btn:hover { background: #3a1212; }
+    [data-theme="carbono"] .btn.primary { background: linear-gradient(135deg, #8b0000, #bd4747); border-color: transparent; }
     .btn:hover { background: #22314a; }
     .btn.primary { background: linear-gradient(135deg, #2563eb, #3b82f6); border-color: transparent; color: #fff; }
     .btn.sm { padding: 7px 10px; font-size: 12px; }
@@ -98,8 +111,8 @@
 
     /* panels */
     .panel { max-width: 1100px; margin: 16px auto; padding: 14px; border: 1px solid #243044; border-radius: 12px; background: #101827; }
-    [data-theme="batocera"] .panel {
-      border-color: #1f2430; background: #0b101b; border-radius: 10px;
+    [data-theme="carbono"] .panel {
+      border-color: var(--border); background: #180404; border-radius: 8px;
     }
     .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
     .row.between { justify-content: space-between; }
@@ -107,14 +120,18 @@
       flex: 1; min-width: 180px; padding: 9px 11px; border-radius: 9px;
       border: 1px solid #2b3a52; background: #0e1624; color: #e8eefc; font-size: 13px;
     }
-    [data-theme="batocera"] .input {
-      border-color: #242a38; background: #0b101b; color: #e5e7eb;
+    [data-theme="carbono"] .input {
+      border-color: #4a1a1a; background: #170000; color: #f0e6e6;
     }
     .hint { color: #93a3bd; font-size: 12px; line-height: 1.5; margin: 8px 0 0; }
     .lan-url { color: #67e8f9; word-break: break-all; font-family: ui-monospace, Consolas, monospace; }
     .status-line { font-size: 12px; color: #93a3bd; }
     .status-line .ok { color: #22c55e; }
     .status-line .err { color: #f87171; }
+    /* Estado vazio de listas/grades/caixas: sem isso o texto ficava colado na
+       borda (e, dentro de uma grade, espremido numa única coluna). */
+    .empty { color: #8b9ab3; font-size: 13px; line-height: 1.55; padding: 12px 2px; }
+    .empty code { font-family: ui-monospace, Consolas, monospace; color: #a8b7d1; }
 
     /* launcher */
     .launcher { max-width: 1100px; margin: 0 auto; padding: 22px 18px 60px; }
@@ -122,9 +139,29 @@
     .hero h1 { font-size: clamp(24px, 4vw, 38px); margin: 0 0 8px; }
     .hero h1 span { background: linear-gradient(135deg, #3b82f6, #22d3ee); -webkit-background-clip: text; background-clip: text; color: transparent; }
     .hero p { margin: 0; color: #9aa8c2; }
+    /* No Carbon o topo do seletor é o "fabricante" em maiúsculas à esquerda,
+       com linha separadora embaixo. */
+    [data-theme="carbono"] .hero {
+      text-align: left; margin-bottom: 18px; padding-bottom: 14px;
+      border-bottom: 1px solid rgba(189,71,71,.35);
+    }
+    [data-theme="carbono"] .hero h1 {
+      text-transform: uppercase; letter-spacing: .04em; color: #d4d4d4;
+      text-shadow: 0 2px 10px rgba(0,0,0,.85);
+    }
+    [data-theme="carbono"] .hero h1 span {
+      background: none; -webkit-background-clip: border-box; background-clip: border-box;
+      color: var(--bc-group);
+    }
+    [data-theme="carbono"] .hero p { color: #b9a7a7; }
 
     .sys-grid { display: block; }
     .cat-title { text-transform: uppercase; font-size: 11px; letter-spacing: .08em; color: #7c8aa5; margin: 22px 4px 10px; }
+    [data-theme="carbono"] .cat-title {
+      color: var(--bc-group); font-size: 12px; letter-spacing: .12em;
+      margin: 24px 2px 12px; padding-bottom: 6px;
+      border-bottom: 1px solid rgba(189,71,71,.3);
+    }
     .sys-row { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; }
     .sys-card {
       --c: #3b82f6;
@@ -133,10 +170,25 @@
       padding: 14px; border-radius: 14px; border: 1px solid #243044;
       background: linear-gradient(180deg, #121b2b, #0e1624); color: inherit; transition: .15s;
     }
-    [data-theme="batocera"] .sys-card {
-      border-color: #1f2430; background: linear-gradient(180deg, #121722, #0c111c);
-      border-radius: 10px;
+    /* Cartão de console no Carbon: painel preto translúcido, canto vivo, barra
+       vermelha à esquerda e destaque em vermelho-claro (é assim que o
+       EmulationStation marca o console selecionado). */
+    [data-theme="carbono"] .sys-card {
+      border-color: var(--border); border-radius: 6px;
+      background: rgba(0,0,0,.5);
     }
+    [data-theme="carbono"] .sys-card::before { width: 3px; background: var(--bc-base); }
+    [data-theme="carbono"] .sys-card:hover {
+      transform: none; border-color: var(--bc-group);
+      box-shadow: 0 0 0 1px var(--bc-group), 0 0 22px rgba(139,0,0,.55);
+    }
+    [data-theme="carbono"] .sys-ico {
+      border-radius: 6px; background: rgba(139,0,0,.22);
+      box-shadow: inset 0 0 0 1px rgba(189,71,71,.35);
+    }
+    [data-theme="carbono"] .sys-info b { color: #f2eaea; }
+    [data-theme="carbono"] .sys-count { color: var(--muted); }
+    [data-theme="carbono"] .sys-short { background: #170000; border-color: var(--border); color: #e0d3d3; border-radius: 5px; }
     .sys-card::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 4px; background: var(--c); }
     .sys-card:hover { transform: translateY(-2px); border-color: var(--c); box-shadow: 0 10px 26px rgba(0,0,0,.35); }
     .sys-ico { width: 48px; height: 48px; border-radius: 12px; display: grid; place-items: center; font-size: 24px;
@@ -146,22 +198,22 @@
     .sys-short { font-size: 11px; font-weight: 800; padding: 3px 7px; border-radius: 7px; background: #0e1624; border: 1px solid #2b3a52; color: #b6c3da; }
     .sys-tags { grid-column: 1 / -1; display: flex; gap: 6px; flex-wrap: wrap; margin-top: 4px; }
     .pill { font-size: 10px; font-weight: 700; padding: 3px 8px; border-radius: 999px; background: #1b2740; border: 1px solid #2b3a52; color: #a8b7d1; }
-    [data-theme="batocera"] .pill {
-      background: #141824; border-color: #242a38; color: #cbd5e1;
+    [data-theme="carbono"] .pill {
+      background: #170000; border-color: var(--border); color: #d8c9c9;
     }
     .pill.ok { color: #86efac; border-color: #166534; }
     .pill.warn { color: #fcd34d; border-color: #78350f; }
 
-    .crumb { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
+    .crumb { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
     .crumb-title { color: #93a3bd; font-size: 13px; }
-    .sys-head { display: flex; align-items: center; gap: 14px; margin-bottom: 20px; }
+    .sys-head { display: flex; align-items: center; gap: 14px; margin-bottom: 16px; }
     .sys-big-ico { font-size: 44px; }
     .sys-head h1 { margin: 0; font-size: clamp(22px, 3.4vw, 32px); }
 
     .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(320px, 100%), 1fr)); gap: 14px; }
     .card { background: linear-gradient(180deg, #131c2c, #0f1622); border: 1px solid #243044; border-radius: 14px; padding: 14px; }
-    [data-theme="batocera"] .card {
-      background: linear-gradient(180deg, #121722, #0c111c); border-color: #1f2430; border-radius: 10px;
+    [data-theme="carbono"] .card {
+      background: linear-gradient(180deg, #1c0505, #120000); border-color: var(--border); border-radius: 8px;
     }
     .card h2 { margin: 0 0 10px; font-size: 15px; display: flex; align-items: center; gap: 8px; }
     .card.muted-card { opacity: .6; }
@@ -170,12 +222,12 @@
       border: 2px dashed #33507a; border-radius: 12px; padding: 22px 14px; text-align: center;
       color: #9aa8c2; cursor: pointer; transition: .15s; background: rgba(37,99,235,.05);
     }
-    [data-theme="batocera"] .drop {
-      border-color: #374151; color: #9ca3af; background: rgba(14,165,233,.06);
+    [data-theme="carbono"] .drop {
+      border-color: #4a1a1a; color: #b9a7a7; background: rgba(139,0,0,.08);
     }
     .drop:hover, .drop.drag { border-color: #3b82f6; color: #e8eefc; background: rgba(37,99,235,.12); }
-    [data-theme="batocera"] .drop:hover, [data-theme="batocera"] .drop.drag {
-      border-color: #06b6d4; color: #e5e7eb; background: rgba(14,165,233,.14);
+    [data-theme="carbono"] .drop:hover, [data-theme="carbono"] .drop.drag {
+      border-color: var(--bc-group); color: #f0e6e6; background: rgba(139,0,0,.16);
     }
     .drop.disabled { opacity: .5; cursor: not-allowed; }
     /* Seleção de arquivo embutida e compacta: uma linha só, sem emoji gigante
@@ -184,14 +236,26 @@
     .drop-ico { font-size: 16px; }
     .hint-inline { color: #7c8aa5; font-weight: 400; }
 
-    /* game grid with covers */
-    .games-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(132px, 1fr)); gap: 12px; margin-top: 10px; }
+    /* Ritmo interno do cartão único de jogos (barra de ferramentas + playlist),
+       em vez de margin/gap soltos inline no HTML. */
+    .card-games > .row { margin-top: 10px; gap: 8px; }
+    .card-games > .row.between { margin-top: 0; }
+
+    /* Grade de capas do console. Mostra ~GRID_MAX_CARDS jogos; passando disso a
+       grade rola por dentro (a altura vem de capGamesGrid(), pois o número de
+       colunas é responsivo e um valor fixo em px quebraria no mobile). O padding
+       dá espaço para o hover (translateY(-2px)) e a sombra do cartão não serem
+       recortados pelo overflow; overscroll-behavior evita a rolagem "vazar". */
+    .games-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(132px, 1fr)); gap: 12px; margin-top: 12px; padding: 4px 6px 10px 4px; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: #2b3a52 transparent; }
+    .games-grid::-webkit-scrollbar { width: 8px; }
+    .games-grid::-webkit-scrollbar-thumb { background: #2b3a52; border-radius: 999px; }
+    .games-grid > .empty { grid-column: 1 / -1; }
     .game-card {
       display: flex; flex-direction: column; overflow: hidden; border-radius: 12px;
       border: 1px solid #243044; background: #0e1624; transition: .15s;
     }
-    [data-theme="batocera"] .game-card {
-      border-color: #1f2430; background: #0c111c; border-radius: 10px;
+    [data-theme="carbono"] .game-card {
+      border-color: var(--border); background: #140000; border-radius: 8px;
     }
     .game-card:hover { transform: translateY(-2px); border-color: #3b82f6; box-shadow: 0 10px 26px rgba(0,0,0,.4); }
     .game-cover {
@@ -202,11 +266,11 @@
     .game-cover .fallback { position: absolute; font-size: 34px; opacity: .65; }
     .game-cover img { position: relative; width: 100%; height: 100%; object-fit: cover; display: block; opacity: 0; transition: opacity .3s; }
     .game-cover img.loaded { opacity: 1; }
-    .game-body { padding: 8px 9px 9px; display: flex; flex-direction: column; gap: 6px; flex: 1; }
+    .game-body { padding: 9px; display: flex; flex-direction: column; gap: 6px; flex: 1; }
     .game-name { font-size: 12px; font-weight: 600; line-height: 1.3; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; min-height: 31px; }
     .game-meta { font-size: 10px; color: #8b9ab3; }
     .game-actions { display: flex; gap: 6px; margin-top: auto; }
-    .game-actions .btn { flex: 1; justify-content: center; padding: 6px 4px; }
+    .game-actions .btn { flex: 1; justify-content: center; padding: 7px 4px; }
 
     /* Selo da origem do jogo na grade única de cada console: "rede" (pasta do
        servidor), "link" (URL) ou o rótulo dos recentes de outras origens. */
@@ -234,26 +298,32 @@
 
     .list { display: flex; flex-direction: column; gap: 8px; max-height: 280px; overflow-y: auto; margin: 10px 0; }
     .list-item { display: flex; align-items: center; gap: 10px; padding: 9px 11px; border: 1px solid #223148; border-radius: 10px; background: #0e1624; }
-    [data-theme="batocera"] .list-item { border-color: #1f2430; background: #0c111c; }
+    [data-theme="carbono"] .list-item { border-color: var(--border); background: #140000; }
     .list-item .meta { flex: 1; min-width: 0; }
     .list-item .meta b { display: block; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .list-item .meta span { font-size: 11px; color: #93a3bd; }
 
     /* Cartão "Alternativas": uma linha por forma distinta de rodar o console. */
     .alt-row { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; padding: 10px 12px; border: 1px solid #223148; border-radius: 10px; background: #0e1624; color: inherit; cursor: pointer; font: inherit; }
-    [data-theme="batocera"] .alt-row { border-color: #1f2430; background: #0c111c; }
+    [data-theme="carbono"] .alt-row { border-color: var(--border); background: #140000; }
     .alt-row:hover { border-color: #3b82f6; }
     .alt-name b { display: block; font-size: 13px; }
     .alt-hint { display: block; font-size: 11px; color: #93a3bd; line-height: 1.5; }
 
-    [data-theme="batocera"] .net-details {
-      border-color: #1f2430; background: #0c111c;
+    [data-theme="carbono"] .net-details {
+      border-color: var(--border); background: #140000;
     }
-    [data-theme="batocera"] code { background: #141824; }
 
     .foot { color: #7c8aa5; font-size: 12px; margin-top: 26px; text-align: center; line-height: 1.6; }
+    /* Rodapé como a barra vermelha de atalhos do Carbon (bottomBarColor). */
+    [data-theme="carbono"] .foot {
+      text-align: left; margin-top: 30px; padding: 10px 14px;
+      background: rgba(139,0,0,.78); border-radius: 4px; color: #f3e3e3;
+    }
+    [data-theme="carbono"] .foot code { background: rgba(0,0,0,.35); }
+    [data-theme="carbono"] .lan-url { color: #ffd0d0; }
     code { background: #1b2740; padding: 1px 6px; border-radius: 6px; }
-    [data-theme="batocera"] code { background: #141824; }
+    [data-theme="carbono"] code { background: #2a0d0d; }
 
     /* player — altura calculada com a altura REAL do cabeçalho (--topbar-h) e
        usando dvh (a barra de endereço do celular some/volta e o 100vh ficaria
@@ -387,7 +457,7 @@
       .sys-row { grid-template-columns: 1fr; }
       .grid { grid-template-columns: 1fr; }
       /* capas: 3 por linha no celular, formato de caixa de jogo */
-      .games-grid { grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 9px; }
+      .games-grid { grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 10px; padding: 4px 5px 10px 4px; }
       .game-cover { aspect-ratio: 3 / 4; }
       .game-cover .fallback { font-size: 26px; }
       .game-name { font-size: 11px; min-height: 28px; }
@@ -467,16 +537,6 @@
     <button id="btn-server-local" class="btn sm" type="button">↩️ Usar o servidor desta página</button>
     <button id="btn-server-sync" class="btn sm" type="button" title="Buscar o catálogo do servidor novamente">🔄 Sincronizar</button>
   </div>
-
-  <div class="row between" style="margin-top:14px;border-top:1px solid #223148;padding-top:10px">
-    <strong>📁 Pasta de games</strong>
-  </div>
-  <p class="hint">Informe a pasta onde estão os jogos. Ela é <b>separada automaticamente por console</b>: subpastas com nome de console (<code>PS1/</code>, <code>SNES/</code>, <code>Mega Drive/</code>…) viram a pasta de cada console — então cada console mostra só os seus jogos.</p>
-  <div class="row" style="margin-top:8px">
-    <input id="root-input" class="input" type="text" placeholder="D:\Jogos   ·   \\PC\jogos" spellcheck="false" />
-    <button id="btn-save-root" class="btn sm primary" type="button">Salvar</button>
-  </div>
-  <p class="hint" id="root-status">—</p>
 </section>
 
 <!-- MENU "⋯": opções gerais fora dos consoles — tema do site e backup da
@@ -489,7 +549,7 @@
     <label class="hint" style="margin:0">Tema
       <select id="theme-select" class="input sm" aria-label="Tema do site" style="min-width:150px">
         <option value="default">Padrão</option>
-        <option value="batocera">Batocera</option>
+        <option value="carbono">Carbono</option>
       </select>
     </label>
   </div>
@@ -519,7 +579,7 @@
       <input id="np-join-code" class="input" type="text" maxlength="8" placeholder="Código da sala (ex.: ABC12)" spellcheck="false" style="max-width:220px; text-transform:uppercase" />
       <button id="btn-np-join" class="btn sm" type="button">Entrar por código</button>
     </div>
-    <p class="hint">Crie a sala ou entre numa existente. Pode criar <strong>antes mesmo de escolher o jogo</strong> — quando o host iniciar uma partida, ela aparece para todos os convidados.</p>
+    <p class="hint">O código serve para <strong>entrar numa sala que já existe</strong>. Para abrir uma sala nova use <strong>➕ Criar sala</strong> — o código é gerado único, e dá para criar <strong>antes mesmo de escolher o jogo</strong>: quando o host iniciar uma partida, ela aparece para todos os convidados.</p>
     <div id="np-rooms" class="list"><div class="empty">Nenhuma sala aberta.</div></div>
     <div class="row" style="margin-top:8px">
       <input id="np-room-name" class="input" type="text" placeholder="Nome da sala (opcional)" spellcheck="false" />
@@ -627,12 +687,12 @@
       <h2><span class="ico">🎮</span> Jogos</h2>
       <span class="status-line" id="games-count">—</span>
     </div>
-    <div class="row" style="margin-top:8px;gap:6px;flex-wrap:wrap">
+    <div class="row">
       <input id="game-filter" class="input" type="search" placeholder="🔎 Buscar jogo pelo nome…" spellcheck="false" style="flex:1;min-width:160px" />
       <button id="btn-make-m3u" class="btn sm" type="button" title="Juntar vários discos em uma playlist .m3u">🧩 Criar .m3u</button>
       <button id="btn-refresh-games" class="btn sm" type="button">🔄 Atualizar</button>
     </div>
-    <div id="m3u-bar" class="row hidden" style="margin-top:8px;gap:6px">
+    <div id="m3u-bar" class="row hidden">
       <input id="m3u-name" class="input" type="text" placeholder="Nome da playlist" spellcheck="false" />
       <button id="btn-m3u-create" class="btn sm primary" type="button">Criar</button>
       <button id="btn-m3u-cancel" class="btn sm" type="button">Cancelar</button>
@@ -754,6 +814,7 @@
     if (h > 0) document.documentElement.style.setProperty('--topbar-h', h + 'px');
   }
   window.addEventListener('resize', medirTopbar);
+  window.addEventListener('resize', capGamesGrid);
   window.addEventListener('orientationchange', function () { setTimeout(medirTopbar, 250); });
   if (document.readyState !== 'loading') medirTopbar();
   else document.addEventListener('DOMContentLoaded', medirTopbar);
@@ -1750,6 +1811,57 @@
   // quando só os links/recentes mudam.
   var serverGamesCache = {};
 
+  // Contador da lista: "N jogos" (ou "X de N" com o filtro ativo) e o aviso de
+  // que a grade está cortada — o resto rola dentro dela.
+  function updateGamesCount() {
+    var box = el('games-list');
+    var count = el('games-count');
+    if (!box || !count) return;
+    var input = el('game-filter');
+    var q = input ? (input.value || '').trim().toLowerCase() : '';
+    var total = 0, shown = 0;
+    Array.prototype.forEach.call(box.querySelectorAll('.game-card'), function (c) {
+      total++;
+      if (c.style.display !== 'none') shown++;
+    });
+    var txt = q ? (shown + ' de ' + total) : (total + (total === 1 ? ' jogo' : ' jogos'));
+    if (box.dataset.capped === '1') txt += ' · role para ver mais';
+    count.textContent = txt;
+  }
+
+  // Teto de jogos da grade. O nº de colunas é responsivo, então calculamos
+  // quantas linhas ~14 cartões dão (corte sempre em linha cheia) e ainda
+  // limitamos ao que cabe na tela — no celular 14 cartões seriam 5 linhas.
+  // O resto fica acessível rolando dentro da própria grade.
+  var GRID_MAX_CARDS = 14;
+  function capGamesGrid() {
+    var box = el('games-list');
+    if (!box) return;
+    box.style.maxHeight = '';
+    box.dataset.capped = '0';
+    var all = box.querySelectorAll('.game-card');
+    var cards = [];
+    for (var i = 0; i < all.length; i++) {
+      if (all[i].style.display !== 'none') cards.push(all[i]);
+    }
+    if (cards.length > GRID_MAX_CARDS) {
+      var cs = getComputedStyle(box);
+      var tmpl = cs.gridTemplateColumns || '';
+      var rowH = cards[0].offsetHeight;
+      if (tmpl !== 'none' && rowH) {           // sem layout ainda: não mede
+        var gap = parseFloat(cs.rowGap) || 0;
+        var cols = Math.max(1, tmpl.split(' ').filter(Boolean).length);
+        var rows = Math.max(1, Math.round(GRID_MAX_CARDS / cols));
+        var porCartoes = rows * rowH + (rows - 1) * gap;
+        var disponivel = window.innerHeight - box.getBoundingClientRect().top - 12;
+        var minimo = 2 * rowH + gap;           // nunca menos que duas linhas
+        box.style.maxHeight = Math.max(minimo, Math.min(porCartoes, disponivel)) + 'px';
+        if (box.scrollHeight > box.clientHeight + 1) box.dataset.capped = '1';
+      }
+    }
+    updateGamesCount();
+  }
+
   // Grade única de jogos do console: jogos do SERVIDOR (selo "rede"), jogos por
   // LINK (selo "link") e os recentes que não vêm desses dois (arquivo do
   // aparelho, página própria, PC nativo). Sem cartões separados.
@@ -1846,11 +1958,7 @@
     var badge = document.createElement('span');
     badge.className = 'game-badge rede';
     badge.textContent = 'rede';
-    var badge = document.createElement('span');
-    badge.className = 'game-badge link';
-    badge.textContent = 'rede';
     cover.appendChild(img);
-    cover.appendChild(badge);
     cover.appendChild(badge);
 
     var body = document.createElement('div');
@@ -1912,16 +2020,11 @@
     if (!input) return;
     var q = (input.value || '').trim().toLowerCase();
     var cards = el('games-list') ? el('games-list').querySelectorAll('.game-card') : [];
-    var shown = 0;
     Array.prototype.forEach.call(cards, function (c) {
       var ok = !q || (c.dataset.name || '').indexOf(q) >= 0;
       c.style.display = ok ? '' : 'none';
-      if (ok) shown++;
     });
-    var count = el('games-count');
-    if (!count) return;
-    if (q) count.textContent = shown + ' de ' + cards.length;
-    else count.textContent = cards.length + (cards.length === 1 ? ' jogo' : ' jogos');
+    capGamesGrid();
   }
 
   // -------------------------------------------------------------------- links
@@ -2018,11 +2121,7 @@
     badge.textContent = KIND_LABELS[item.kind] || 'jogo';
 
     cover.appendChild(fb);
-    var badge = document.createElement('span');
-    badge.className = 'game-badge link';
-    badge.textContent = 'rede';
     cover.appendChild(img);
-    cover.appendChild(badge);
     cover.appendChild(badge);
 
     var body = document.createElement('div');
@@ -2183,11 +2282,7 @@
     // Capa: URL manual (se houver) ou busca pelo nome no console do link.
     img.src = link.cover ? coverUrlManual(sys, link.cover) : coverUrlByName(sys, link.name || linkName(link.url));
     cover.appendChild(fb);
-    var badge = document.createElement('span');
-    badge.className = 'game-badge link';
-    badge.textContent = 'rede';
     cover.appendChild(img);
-    cover.appendChild(badge);
     cover.appendChild(badge);
 
     var body = document.createElement('div');
@@ -2505,11 +2600,23 @@
   }
 
   // --------------------------------------------------------------- player/boot
+  // O "🏠 Consoles" da barra do topo existe para VOLTAR ao seletor — então ele
+  // só aparece quando o seletor não está à vista. Derivar isso do estado real
+  // das views (em vez de cada fluxo ligar/desligar na mão) resolve o incômodo
+  // de o botão surgir já no seletor: no lobby ele era mostrado sem haver para
+  // onde voltar, não fazia nada e ainda desaparecia ao ser clicado.
+  function syncBtnHome() {
+    var b = el('btn-home');
+    if (!b) return;
+    var hub = el('view-hub');
+    b.classList.toggle('hidden', !!(hub && !hub.classList.contains('hidden')));
+  }
+
   function showHub() {
     show(el('view-hub'));
     hide(el('view-system'));
     hide(el('view-player'));
-    hide(el('btn-home'));
+    syncBtnHome();
   }
 
   function bootPlayer(session, sys) {
@@ -2552,7 +2659,7 @@
     hide(el('view-hub'));
     hide(el('view-system'));
     show(el('view-player'));
-    show(el('btn-home'));
+    syncBtnHome();
     NP.viewIniciada = true;
     // O jogador local roda o jogo aqui — o "palco" do convidado (tela preta com
     // "Aguardando o host") NUNCA pode ficar por cima do emulador. Sem isso, quem
@@ -2712,7 +2819,7 @@
     hide(el('view-hub'));
     show(el('view-system'));
     hide(el('view-player'));
-    show(el('btn-home'));
+    syncBtnHome();
     loadGames(sys);
     window.scrollTo(0, 0);
   }
@@ -3019,7 +3126,7 @@
         }
         NP.dupRetries = 0;
         NP.pendingJoin = null;
-        if (!NP.myId) NP.roomId = null;
+        if (!NP.myId) { NP.roomId = null; npSetStatus('Fora da sala'); }
         toast('Netplay: ' + escapeHtml(p.message || 'erro'), 'err');
         break;
     }
@@ -3034,6 +3141,7 @@
     if (p.metadata) NP.meta = p.metadata;
     if (p.room) NP.summary = p.room;
     NP.roomId = (p.room && p.room.roomId) || NP.roomId;
+    npSetStatus((NP.isHost ? 'Sala ' : 'Na sala ') + NP.roomId);
     var list = (p.peers || []).map(function (x) {
       return { id: x.id, playerIndex: x.playerIndex, name: x.name || x.metadata && x.metadata.name };
     });
@@ -3167,12 +3275,14 @@
     NP.roomId = code;
     npSetStatus('Criando sala…');
 
-    // Uma única forma de criar sala: pelo sinalizador (🏠 LAN ou 🌐 Online —
-    // escolhido no seletor acima). O convidado entra pelo link/código.
+    // Criar sala é a ÚNICA ação que abre uma sala nova (`create: true`). O código
+    // é proposto aqui e o servidor garante que seja único (se já existir, ele
+    // devolve outro no peer-list). O campo de código serve só para ENTRAR.
     npConnect().then(function () {
       npSend({
         type: 'join',
         payload: {
+          create: true,
           roomId: code, playerIndex: 0, password: pass,
           // Token de sessão: identifica este navegador. Garante que abrir o link
           // de convite na MESMA máquina (outra aba) não crie um jogador extra.
@@ -3192,6 +3302,10 @@
   }
 
   function npJoinRoom(roomId, password) {
+    // Entrar NÃO cria sala: o código tem que apontar para uma sala que já existe
+    // (o sinalizador responde "Sala não encontrada" se não existir).
+    roomId = String(roomId || '').trim().toUpperCase();
+    if (!roomId) { toast('Informe o código da sala.', 'warn'); return; }
     if (NP.roomId) npLeave(true);
     if (!netplayAvailable) { toast('Netplay indisponível neste servidor.', 'warn'); return; }
     NP.isHost = false;
@@ -3289,9 +3403,8 @@
   function npOpenLobby() {
     el('lobby-panel').classList.remove('hidden');
     if (el('np-name') && !el('np-name').value) el('np-name').value = NP.name || '';
-    // Deixa o "🏠 Consoles" disponível: dá para sair do lobby e escolher um
-    // jogo sem sair da sala.
-    show(el('btn-home'));
+    // Reavalia o "🏠 Consoles": no próprio seletor ele não deve aparecer.
+    syncBtnHome();
     if (!netplayAvailable) { npSetStatus('Netplay indisponível (servidor sem WebSocket)'); return; }
     npSetStatus('Conectando…');
     npConnect().then(function () {
@@ -3336,8 +3449,8 @@
     if (!NP.roomId) return;
     if (el('np-lobby-view')) el('np-lobby-view').classList.add('hidden');
     if (el('np-room-view')) el('np-room-view').classList.remove('hidden');
-    // "🏠 Consoles" disponível dentro da sala (sair/entrar em jogos sem sair da sala).
-    show(el('btn-home'));
+    // "🏠 Consoles" aparece só fora do seletor (sair/entrar em jogos sem sair da sala).
+    syncBtnHome();
     if (el('np-code')) el('np-code').textContent = NP.roomId;
     if (el('np-link')) {
       var convite = npShareLink(NP.roomId);
@@ -3478,7 +3591,7 @@
   function npMostrarJogoHost() {
     if (!window.EJS_emulator) return false;
     hide(el('view-hub')); hide(el('view-system'));
-    show(el('view-player')); show(el('btn-home'));
+    show(el('view-player')); syncBtnHome();
     NP.viewIniciada = true;
     npBuildStage();
     if (el('np-stage')) el('np-stage').classList.add('hidden'); // palco é do convidado
@@ -3578,7 +3691,7 @@
     if (el('np-video')) { try { el('np-video').pause(); } catch (e) {} el('np-video').srcObject = null; }
 
     hide(el('view-hub')); hide(el('view-system'));
-    show(el('view-player')); show(el('btn-home'));
+    show(el('view-player')); syncBtnHome();
     NP.viewIniciada = true;
     if (el('lobby-panel')) el('lobby-panel').classList.add('hidden');
     if (el('player-name')) el('player-name').textContent = (NP.meta && NP.meta.gameName) || NP.roomId || 'Netplay';
@@ -4632,31 +4745,6 @@
       var f = el('game-filter');
       if (f) f.addEventListener('input', filterGames);
     })();
-    // 📁 Pasta de games (raiz): o backend separa automaticamente por console.
-    el('btn-save-root').addEventListener('click', function () {
-      var input = el('root-input');
-      var root = input ? input.value.trim() : '';
-      if (!root) { toast('Informe a pasta de games.', 'warn'); return; }
-      var btn = el('btn-save-root'); btn.disabled = true;
-      var status = el('root-status');
-      if (status) status.textContent = 'Lendo a pasta…';
-      api('/api/config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ root: root }) })
-        .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
-        .then(function (res) {
-          if (!res.ok) throw new Error(res.j.error || 'Falha');
-          if (el('root-input')) el('root-input').value = res.j.root || root;
-          if (status) status.textContent = res.j.message || 'Pasta salva.';
-          toast(res.j.message || 'Pasta de games salva.', 'ok');
-          // Pastas de todos os consoles mudaram: redesenha o hub e a lista atual.
-          loadSystems().catch(function () {});
-          if (currentSystem) loadGames(currentSystem);
-        })
-        .catch(function (e) {
-          if (status) status.textContent = '';
-          toast('Erro: ' + escapeHtml(e && e.message ? e.message : e), 'err');
-        })
-        .finally(function () { btn.disabled = false; });
-    });
 
     el('btn-open-external').addEventListener('click', function () { if (currentSystem) openExternal(currentSystem, null); });
     el('btn-bios-file').addEventListener('click', function () { el('bios-input').click(); });
@@ -4683,23 +4771,23 @@
     if (el('btn-ss-load')) el('btn-ss-load').addEventListener('click', ssLoad);
     if (el('btn-fs-exit')) el('btn-fs-exit').addEventListener('click', npSairTelaCheia);
 
-    // Inicializa tema salvo (Padrão ou estilo Batocera) e reage ao seletor.
+    // Inicializa tema salvo (Padrão ou Carbono) e reage ao seletor.
     function initTheme() {
       try {
         var t = localStorage.getItem('ps1emu.theme') || 'default';
-        if (t === 'batocera') document.documentElement.setAttribute('data-theme', 'batocera');
+        if (t === 'carbono') document.documentElement.setAttribute('data-theme', 'carbono');
         else document.documentElement.removeAttribute('data-theme');
         var sel = el('theme-select');
-        if (sel) sel.value = t === 'batocera' ? 'batocera' : 'default';
+        if (sel) sel.value = t === 'carbono' ? 'carbono' : 'default';
       } catch (e) {}
     }
     initTheme();
     var themeSel = el('theme-select');
     if (themeSel) {
       themeSel.addEventListener('change', function () {
-        var v = themeSel.value === 'batocera' ? 'batocera' : 'default';
+        var v = themeSel.value === 'carbono' ? 'carbono' : 'default';
         try { localStorage.setItem('ps1emu.theme', v); } catch (e) {}
-        if (v === 'batocera') document.documentElement.setAttribute('data-theme', 'batocera');
+        if (v === 'carbono') document.documentElement.setAttribute('data-theme', 'carbono');
         else document.documentElement.removeAttribute('data-theme');
       });
     }
