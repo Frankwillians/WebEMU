@@ -11,12 +11,18 @@ GBA, DS, Virtual Boy, Mega Drive/Genesis, Master System, Game Gear, Sega CD,
 32X, Saturn, Atari 2600/7800/Lynx/Jaguar, Arcade (FBNeo), PC Engine, Neo Geo
 Pocket, WonderSwan, 3DO, PC-FX, Commodore 64, DOS e Amiga**.
 
+Além deles, o **PSP** traz uma alternativa **dentro dele**: o **PPSSPP Web (WASM)**
+(build do [root-hunter/ppsspp-web](https://github.com/root-hunter/ppsspp-web)),
+que aparece como um botão na visão do PSP quando o build está presente (veja a
+seção **PSP Web**).
+
 > **Núcleo de emulação:** cores do [EmulatorJS](https://emulatorjs.org)
 > (LibRetro compilado para WASM: PCSX-ReARMed, Snes9x, FCEUmm, mGBA,
 > Mupen64Plus, ...). O **PS2** usa o [Play! .js](https://playjs.purei.org/)
-> no navegador e o **PCSX2** via RetroArch no modo nativo. Usamos cores
-> maduros em vez de reescrever o emulador do zero — é o que faz os jogos
-> **realmente rodarem**.
+> no navegador (e o **PCSX2** via RetroArch no modo nativo); o **PSP Web**
+> usa o [PPSSPP compilado para WebAssembly](https://github.com/root-hunter/ppsspp-web).
+> Usamos cores maduros em vez de reescrever o emulador do zero — é o que faz os
+> jogos **realmente rodarem**.
 >
 > A página `/play.html` é servida **cross-origin isolated** (`COOP: same-origin`
 > + `COEP: require-corp`) para habilitar `SharedArrayBuffer` e o modo *threads*
@@ -151,8 +157,11 @@ ps1emu/
 ├── bios/                     ← BIOS de PS1 (ex.: scph5501.bin)
 ├── games/                    ← ROMs/ISOs de PS1 (servidas pela rede)
 ├── ps2games/                 ← ISOs de PS2 (experimental; separado de games/)
+├── ppsspp-web/               ← PPSSPP Web (PSP no navegador) — espelhado, fora do Git
 ├── package.json              ← Backend (Express + WebSocket)
 ├── .env.example              ← Configurações do backend
+├── scripts/
+│   └── fetch-ppsspp-web.mjs  ← Espelha o build publicado do PPSSPP Web → ppsspp-web/
 ├── src/
 │   └── backend/
 │       ├── bios.js           ← Upload/armazenamento de BIOS
@@ -431,6 +440,7 @@ core lê a lista (o `.m3u` referencia os discos por caminho relativo).
 | POST   | `/api/ps2/rescan` | Reindexa a pasta de PS2                         |
 | GET    | `/ps2roms/...`    | Arquivos de PS2 (com Range), servidos da pasta de PS2 |
 | GET    | `/ps2/`           | Emulador de PS2 (Play! .js) — abrir como página própria |
+| GET    | `/ppsspp/`        | PPSSPP Web (PSP no navegador) — abrir como página própria |
 
 ### API da central (multi-console, capas)
 
@@ -526,6 +536,59 @@ A pasta também pode ser definida pela variável de ambiente `PS2_DIR`.
 
 ---
 
+## 🎮 PSP Web (PPSSPP em WebAssembly)
+
+Além do **PSP** "padrão" (núcleo PPSSPP do EmulatorJS, com **biblioteca** e
+**netplay**), a própria tela do PSP ganha uma alternativa: o **PPSSPP Web (WASM)**,
+o [PPSSPP compilado para WebAssembly](https://github.com/root-hunter/ppsspp-web),
+que abre como **página própria** em `/ppsspp/`.
+
+> ⚠️ **É uma página própria, não um jogo da lista.** A página do PPSSPP Web **não**
+> recebe a ROM por parâmetro (`?url=`), então o botão só abre o emulador — você
+> escolhe o ISO **dentro dele**. Por isso ele fica como opção na visão do PSP, ao
+> lado dos jogos da biblioteca, e não na lista de jogos.
+
+### Como habilitar (build publicado)
+
+O PPSSPP Web é um **artefato de terceiros** e **não é versionado** (fica fora do
+Git, como `recomp/`). Baixe-o com:
+
+```bash
+node scripts/fetch-ppsspp-web.mjs
+```
+
+Isso espelha o build publicado (`root-hunter.github.io/ppsspp-web`) em
+**`ppsspp-web/`**. Reinicie o servidor: abra o **PSP** e o botão
+**▶ Abrir** do cartão **PPSSPP Web (WASM)** aparece ali. Você também pode ir
+direto em `http://localhost:3000/ppsspp/`.
+
+- **Se a pasta não existir**, o botão some (nada de atalho quebrado). No site
+  publicado na Vercel ele também não aparece, porque o artefato não vai no deploy.
+- Hospedamos na **nossa origem** (com `COOP`/`COEP`) para ganhar o modo *threads*
+  e o áudio que a hospedagem original (GitHub Pages) não oferece.
+
+### Como funciona
+
+O `ppsspp-runtime.js` carrega `build-wasm/PPSSPPSDL.{js,wasm,data}` e os assets
+listados em `assets-manifest.txt`. Tudo é servido por `/ppsspp/*` com
+`Cross-Origin-Opener-Policy: same-origin`, `Cross-Origin-Embedder-Policy:
+require-corp` e `Cross-Origin-Resource-Policy: same-origin` (o `COEP:
+require-corp` exige o CORP em cada recurso) e com **Range requests** (para o
+`.wasm`/`.data` grandes).
+
+> **Licença:** o runtime do PPSSPP Web é **GPL-2.0-or-later** (o PPSSPP é GPL).
+> Distribuído como binário, mantenha a atribuição e o link do fonte
+> (<https://github.com/root-hunter/ppsspp-wasm>). A pasta `ppsspp-web/` é
+> ignorada pelo Git.
+
+### Variável de ambiente
+
+| Variável | Padrão | Efeito |
+|----------|--------|--------|
+| `PPSSPP_DIR` | `<raiz>/ppsspp-web` | Pasta do build do PPSSPP Web (servida em `/ppsspp`) |
+
+---
+
 ## ⚡ Builds recompilados (PS2 / PSP → WebAssembly)
 
 Existe uma segunda forma de rodar PS2 e PSP **no navegador**, de altíssima
@@ -558,8 +621,10 @@ própria** (não em iframe), já com `COOP`/`COEP` e suporte a **Range requests*
 
 > **Resumo prático:** para jogar **qualquer** PS2/PSP no navegador (sua
 > biblioteca inteira), continue com o **Play! .js** (PS2) e o **PPSSPP**
-> (PSP) — que já emulam no próprio aparelho pelo site. Use os builds
-> recompilados **só** para os 4 títulos suportados acima, gerados localmente.
+> (PSP) — que já emulam no próprio aparelho pelo site. Há ainda o **PPSSPP
+> Web** como alternativa **dentro da tela do PSP** (página própria em
+> `/ppsspp/`, sem netplay). Use os builds recompilados **só** para os 4
+> títulos suportados acima, gerados localmente.
 
 ### API dos builds recompilados
 
@@ -620,6 +685,13 @@ NES, GB…), as direções. Dá para ligar/desligar com o botão 🎮 da barra d
 - [x] Pasta `ps2games/` separada + cartão na interface
 - [x] Carregamento de ISOs por **HTTP Range** (sem baixar o arquivo inteiro)
 - [x] Sem necessidade de BIOS
+
+### 🧪 Fase 1.7 — PSP Web (esta entrega)
+- [x] Botão **PPSSPP Web (WASM)** dentro da tela do **PSP** (página própria em `/ppsspp/`)
+- [x] Espelhamento do build publicado (`scripts/fetch-ppsspp-web.mjs`, fora do Git)
+- [x] Servido na nossa origem com COOP/COEP + Range (threads/áudio)
+- [x] Botão some quando o build não está instalado (e na Vercel)
+- [ ] Deploy do build do PPSSPP Web na Vercel (hoje só funciona localmente)
 
 ### ✅ Fase 2 — Multiplayer (esta entrega)
 - [x] Netplay com **lobby** (criar/entrar por código ou link, senha, chat, expulsar)

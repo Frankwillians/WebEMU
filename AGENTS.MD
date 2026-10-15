@@ -66,6 +66,10 @@ Consoles configurados (29) — definidos em `src/backend/systems.js`:
 `segaMS`, `segaGG`, `segaCD`, `sega32x`, `segaSaturn`, `atari2600`, `atari7800`,
 `lynx`, `jaguar`, `arcade`, `pce`, `ngp`, `ws`, `3do`, `pcfx`, `c64`, `dos`, `amiga`.
 
+> O **PSP** ainda traz o **PPSSPP Web** como *alternativa própria* (campo
+> `alternatives`) — não é um console separado. A alternativa não tem cartão
+> próprio: ela aparece como **linha dentro do cartão "🧭 Como rodar"** do PSP.
+
 Quatro "motores" de emulação coexistem:
 
 | Motor | Onde roda | Quando |
@@ -73,6 +77,7 @@ Quatro "motores" de emulação coexistem:
 | **EmulatorJS (LibRetro/WASM)** | No navegador do jogador | Padrão para todos os consoles |
 | **RetroArch nativo** | No PC servidor (`POST /api/systems/:id/launch`) | Modo "PC servidor" (mais rápido) |
 | **Play! .js (WASM)** | Navegador, página `/ps2/` | PS2 experimental |
+| **PPSSPP Web (WASM)** | Navegador, página `/ppsspp/` | PSP: alternativa própria dentro do console (build espelhado; sem netplay) |
 | **Builds recompilados** | Navegador, páginas próprias (`recomp/`) | Só 4 títulos (PS2/PSP), gerados localmente |
 
 > ⚠️ O README documenta **por que** a tela ficava preta no core próprio
@@ -108,7 +113,8 @@ ps1emu/
 ├── src/backend/           Backend Node (ESM)
 │   ├── server.js          HTTP + API REST + estáticos + wiring do signaling
 │   ├── signaling.js       WebSocket de sinalização + lobby (salas/senha/chat/kick)
-│   ├── systems.js         Catálogo dos 29 consoles (id, nome, cores, extensões)
+│   ├── systems.js         Catálogo dos 29 consoles (id, nome, cores, extensões,
+│   │                        page/web, alternatives)
 │   ├── covers.js          Capas: nome→imagem no libretro-thumbnails (exata/aproximada) + rota /api/cover
 │   ├── proxy.js           Guarda de SSRF dos proxies (loopback/link-local)
 │   ├── storage.js         Indexação de ROMs do disco (PS1, PS2, por sistema)
@@ -183,6 +189,7 @@ Definidas em `src/backend/config.js` (lidas do ambiente / `.env`):
 | `SYSTEMS_ROOT` | `<raiz>/roms` | Raiz das pastas por console (`roms/snes`, …) |
 | `RECOMP_DIR` | `<raiz>/recomp` | Builds recompilados PS2/PSP |
 | `PSP_DISC_DIR` | `<raiz>/recomp/psp/disc` | Disco extraído do PSP (servido em `/disc`) |
+| `PPSSPP_DIR` | `<raiz>/ppsspp-web` | Build do PPSSPP Web (servido em `/ppsspp/`; sem ele, o botão do PSP some) |
 | `RETROARCH_PATH` | vazio | Caminho do RetroArch (auto-detecta se vazio) |
 | `CORS_ORIGIN` | `*` | Origens permitidas |
 | `LOG_LEVEL` | `info` | `info` \| `debug` |
@@ -250,7 +257,7 @@ Mídia e inputs:    WebRTC (P2P) — o HOST emula e transmite; convidados só ma
   `SharedArrayBuffer` e o modo threads do PSP) e CORS/CORP em `/api/rom`,
   `/roms/*`, `/api/systems/*`.
 - O servidor de produção serve **apenas o produto**: `play.html` (rotas `/`,
-  `/play`, `/play.html`), `/ps2`, `/recomp`, `/disc`, `/bios`, `/roms` e a API.
+  `/play`, `/play.html`), `/ps2`, `/ppsspp`, `/recomp`, `/disc`, `/bios`, `/roms` e a API.
   O **React (`frontend/src`) é referência de código e não é servido** (o
   *SPA fallback* foi removido).
 
@@ -277,6 +284,7 @@ Mídia e inputs:    WebRTC (P2P) — o HOST emula e transmite; convidados só ma
 | GET/POST | `/api/config` | Lê/grava pastas (grava em `ps1emu.config.json`) |
 | GET | `/api/ps2/games` · POST `/api/ps2/rescan` | Biblioteca de PS2 |
 | GET | `/ps2roms/*` | Arquivos de PS2 (Range) |
+| GET | `/ppsspp/` | PPSSPP Web (WASM) — página própria, alternativa do PSP |
 | GET | `/api/recomp?kind=ps2` | Builds recompilados |
 | GET | `/recomp/ps2|psp/<jogo>/*` · `/disc/*` | Estáticos dos builds (COOP/COEP + Range) |
 | WS | `/signaling` | Sinalizador + lobby **local** (LAN) |
@@ -310,9 +318,11 @@ Mídia e inputs:    WebRTC (P2P) — o HOST emula e transmite; convidados só ma
   duplica) e `renderLinks`/`linkCard` desenham a grade; `playSavedLink` reusa
   `playByUrl`. Fica no cartão **🔗 Links salvos** de cada console, com renomear
   (✏️), capa (🖼) e remover (🗑); esses jogos **somam** na contagem do console
-  (`linksCount`/`sysCard`/`games-count`). No mesmo cartão, `exportLinksBackup`
-  baixa um JSON com a coleção de **todos os consoles** (incluindo `cover`) e
-  `importLinksBackup` restaura (mescla sem duplicar, teto de 100 por console).
+  (`linksCount`/`sysCard`/`games-count`). O cartão tem **só a grade** — exportar/
+  importar saiu dos consoles: `exportLinksBackup` baixa um JSON com a coleção de
+  **todos os consoles** (incluindo `cover`) e `importLinksBackup` restaura (mescla
+  sem duplicar, teto de 100 por console). Ambos ficam no painel **⋯ Mais** da
+  barra do topo (fora dos consoles).
 - **Capa dos links:** `linkCard` pede a capa por `coverUrlByName(sys, nome)` e
   `coverUrlManual(sys, url)`, que compartilham `coverEndpoint` — sempre na origem
   da própria página (`/api/cover?system=&name=|url=`), inclusive no site
@@ -417,11 +427,20 @@ Mensagens do sinalizador (`src/backend/signaling.js`): `join`, `leave`, `offer`,
     o vigia (`npStartGuestWatchdog`) envia `sync-request` ao host, que refaz a
     oferta (`npHostOnSyncRequest`) — sem precisar sair/entrar da sala. O host não
     cria ofertas concorrentes (`npHostCreateOffer(force)`).
+14. **Criar sala é explícito e o código é único.** O `join` só **cria** sala com
+    `create: true` (enviado apenas por `npCreateRoom`); sem essa flag, um código
+    inexistente responde `Sala não encontrada` — digitar qualquer coisa **não**
+    abre sala nem promove o digitador a host. Ao criar, o servidor garante o
+    código único (`generateRoomCode`): se o proposto já existir, sorteia outro e
+    o definitivo volta no `peer-list` (`room.roomId`), que o front adota.
 
-Painéis da UI: **👥 Jogar em rede** = criar sala / netplay. Não há mais painel de
-servidor: para usar os jogos de outra máquina, aponte a base com o parâmetro
-**`?server=`** (`localStorage['ps1emu.apiBase']`, string crua). Um túnel HTTPS é
-responsabilidade do usuário (`PUBLIC_URL` nos links de convite).
+Painéis da UI (topo; abre um de cada vez): **🌐 Servidor** = apontar a base de
+jogos (esta página, outro PC da LAN ou servidor remoto/túnel) com conexão
+automática na abertura (`localStorage['ps1emu.apiBase']`, string crua; o
+parâmetro **`?server=`** grava a mesma chave); **👥 Jogar em rede** = criar sala
+/netplay; **⋯ Mais** = tema do site (Padrão/Carbono) e backup da coleção de
+links (exportar/importar). Um túnel HTTPS é responsabilidade do usuário
+(`PUBLIC_URL` nos links de convite).
 
 ---
 

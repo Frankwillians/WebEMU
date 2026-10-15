@@ -62,7 +62,8 @@ import {
   getSystem,
   defaultDirFor,
   detectRetroArch,
-  findRetroCore
+  findRetroCore,
+  systemForFolderName
 } from './systems.js';
 import { sendCover } from './covers.js';
 import { isBlockedProxyHost } from './proxy.js';
@@ -100,6 +101,13 @@ const ps2Storage = storages.get('ps2');
 let retroarchExe = detectRetroArch();
 
 /**
+ * Pasta RAIZ de jogos atual (ex.: `GAMES/`), separada automaticamente por
+ * subpastas de console. Padrão: `config.systemsRoot` (`roms/`). Persistida em
+ * `ps1emu.config.json` (chave `gamesRoot`).
+ */
+let gamesRoot = config.systemsRoot;
+
+/**
  * Troca a pasta de uma instância de GameStorage, criando-a se necessário.
  * @returns {string} caminho absoluto aplicado
  */
@@ -119,6 +127,49 @@ function setStorageDir(storage, dir) {
     throw new Error('O caminho informado não é uma pasta');
   }
   return storage.setGamesDir(target);
+}
+
+/**
+ * SEPARAÇÃO AUTOMÁTICA POR CONSOLE.
+ *
+ * Aplica uma pasta raiz (ex.: `GAMES/`): cada subpasta cujo nome corresponda a
+ * um console (`PS1/`, `SNES/`, `Mega Drive/`…) vira a pasta daquele console,
+ * sem precisar configurar console por console. Sistemas sem subpasta ficam com
+ * a pasta que já tinham (padrão `roms/<id>`), então não some nada indevidamente.
+ *
+ * @param {string} root caminho absoluto, relativo à raiz do projeto ou UNC
+ * @returns {Record<string,string>} mapa systemId → pasta aplicada
+ */
+function applyGamesRoot(root) {
+  const base = normalizeGamesDir(root);
+  if (!existsSync(base)) {
+    throw new Error(isUncPath(base)
+      ? 'Pasta de rede inacessível. Confira o endereço (\\\\PC\\pasta) e as permissões.'
+      : 'A pasta de jogos informada não existe. Confira o caminho.');
+  }
+  if (!statSync(base).isDirectory()) {
+    throw new Error('O caminho informado não é uma pasta');
+  }
+
+  let entries = [];
+  try {
+    entries = readdirSync(base, { withFileTypes: true });
+  } catch {
+    throw new Error('Não foi possível ler a pasta de jogos (permissão?).');
+  }
+
+  const applied = {};
+  for (const entry of entries) {
+    if (!entry.isDirectory()) continue;
+    const systemId = systemForFolderName(entry.name);
+    if (!systemId || applied[systemId]) continue;
+    const storage = storageFor(systemId);
+    if (!storage) continue;
+    const dir = join(base, entry.name);
+    storage.setGamesDir(dir);
+    applied[systemId] = dir;
+  }
+  return applied;
 }
 
 /** Monta a URL pública (/roms ou /ps2roms) para um jogo indexado */
@@ -159,6 +210,15 @@ async function describeSystem(system) {
   const nativeCore = findRetroCore(system, retroarchExe);
   if (nativeCore) modes.push('host');
 
+  const alternatives = (system.alternatives || [])
+    .filter((alt) => !alt.requires || (config[alt.requires] && existsSync(config[alt.requires])))
+    .map((alt) => ({
+      id: alt.id,
+      name: alt.name,
+      page: alt.page,
+      hint: alt.hint || null
+    }));
+
   return {
     id: system.id,
     name: system.name,
@@ -168,6 +228,8 @@ async function describeSystem(system) {
     category: system.category || 'Outros',
     kind: system.kind || 'emulatorjs',
     page: system.page || null,
+    web: system.web || null,
+    alternatives,
     note: system.note || null,
     needsBios: Boolean(system.needsBios),
     extensions: system.extensions,
@@ -522,6 +584,7 @@ app.get('/api/config', (req, res) => {
   res.json({
     gamesDir: gameStorage.getGamesDir(),
     ps2Dir: ps2Storage.getGamesDir(),
+    gamesRoot,
     dirs,
     biosDir: config.biosDir,
     httpPort: config.httpPort,
@@ -536,33 +599,49 @@ app.get('/api/config', (req, res) => {
 });
 
 // Troca a pasta de jogos. Aceita:
-//   { "system": "snes", "dir": "D:\\roms\\snes" }   (central multi-console)
+//   { "root": "D:\\Jogos" }                          (raiz separada por console)
+//   { "system": "snes", "dir": "D:\\roms\\snes" }    (um console específico)
 //   { "dirs": { "snes": "...", "nes": "..." } }
 //   { "gamesDir": "..." } / { "ps2Dir": "..." }      (compatibilidade)
 // Persistido em ps1emu.config.json.
 app.post('/api/config', async (req, res) => {
   try {
     const body = req.body || {};
-    const requested = [];
+    const result = { ok: true, dirs: {} };
+    const msgs = [];
+    const patch = { dirs: { ...(loadSettings().dirs || {}) } };
 
-    if (body.system && body.dir) {
-      requested.push([body.system, body.dir]);
+    // Pasta raiz: separa AUTOMATICAMENTE por console pelas subpastas.
+    if (body.root) {
+      const applied = applyGamesRoot(body.root);
+    gamesRoot = normalizeGamesDir(body.root);
+      patch.gamesRoot = gamesRoot;
+      for (const [systemId, dir] of Object.entries(applied)) {
+        const storage = storageFor(systemId);
+        if (!storage) continue;
+        patch.dirs[systemId] = dir;
+        const games = await storage.scanGames(true);
+        result.dirs[systemId] = dir;
+        result[`${systemId}Dir`] = dir;
+        result[`${systemId}Indexed`] = games.length;
+        msgs.push(`${getSystem(systemId).short}: ${games.length} jogo(s)`);
+      }
+      result.root = gamesRoot;
     }
+
+    const requested = [];
+    if (body.system && body.dir) requested.push([body.system, body.dir]);
     if (body.dirs && typeof body.dirs === 'object') {
       for (const [id, dir] of Object.entries(body.dirs)) requested.push([id, dir]);
     }
     if (body.gamesDir) requested.push(['ps1', body.gamesDir]);
     if (body.ps2Dir) requested.push(['ps2', body.ps2Dir]);
 
-    if (!requested.length) {
+    if (!requested.length && !body.root) {
       return res.status(400).json({
-        error: 'Informe "system"+"dir", "dirs", "gamesDir" ou "ps2Dir"'
+        error: 'Informe "root", "system"+"dir", "dirs", "gamesDir" ou "ps2Dir"'
       });
     }
-
-    const patch = { dirs: { ...(loadSettings().dirs || {}) } };
-    const result = { ok: true, dirs: {} };
-    const msgs = [];
 
     for (const [systemId, dir] of requested) {
       const system = getSystem(systemId);
@@ -580,7 +659,9 @@ app.post('/api/config', async (req, res) => {
     }
 
     saveSettings(patch);
-    result.message = `Pasta atualizada. ${msgs.join(' · ')}.`;
+    result.message = msgs.length
+      ? `Pasta atualizada. ${msgs.join(' · ')}.`
+      : 'Pasta de jogos salva (nenhum console reconhecido nas subpastas).';
     res.json(result);
   } catch (error) {
     console.error('[API] Erro ao alterar configuração:', error);
@@ -914,6 +995,28 @@ app.get(['/ps2', '/ps2/'], (req, res) => {
   res.sendFile(join(ps2Dir, 'index.html'));
 });
 
+// PPSSPP Web (PSP em WebAssembly). App próprio espelhado de
+// root-hunter/ppsspp-web por scripts/fetch-ppsspp-web.mjs. Como o Play! .js do
+// PS2, usa threads + SharedArrayBuffer: exige cross-origin isolation (COOP/COEP)
+// e por isso abre como página própria (top-level), não dentro de iframe. Serve
+// com Range porque o motor lê .wasm/.data grandes.
+const ppssppWebDir = config.ppssppDir;
+app.use('/ppsspp', (req, res, next) => {
+  res.setHeader('Cross-Origin-Opener-Policy', 'same-origin');
+  res.setHeader('Cross-Origin-Embedder-Policy', 'require-corp');
+  res.setHeader('Cross-Origin-Resource-Policy', 'same-origin');
+  next();
+}, express.static(ppssppWebDir, { index: 'index.html', etag: true, acceptRanges: true }));
+app.get(['/ppsspp', '/ppsspp/'], (req, res) => {
+  if (!existsSync(join(ppssppWebDir, 'index.html'))) {
+    return res.status(503).type('html').send(
+      '<h1>PPSSPP Web não instalado</h1>' +
+      '<p>Rode <code>node scripts/fetch-ppsspp-web.mjs</code> e reinicie o servidor.</p>'
+    );
+  }
+  res.sendFile(join(ppssppWebDir, 'index.html'));
+});
+
 // ==================== BUILDS RECOMPILADOS (PS2/PSP → WebAssembly) ====================
 // Os projetos snuri00/ps2-web-recomp e snuri00/psp-web-recomp geram, POR JOGO,
 // um site estático em WebAssembly (não é um emulador genérico). Coloque o
@@ -1082,6 +1185,20 @@ async function start() {
       console.log(`[SETTINGS] Pasta de ${id}:`, storage.getGamesDir());
     } catch (e) {
       console.warn(`[SETTINGS] Pasta de ${id} inválida:`, e.message);
+    }
+  }
+
+  // Raiz de jogos (separação automática por console). Reaplica a cada boot para
+  // apanhar subpastas novas (console adicionado depois). Roda depois das pastas
+  // por console para a raiz vencer. Não derruba o servidor se a pasta sumiu
+  // (ex.: HD externo/ rede desconectada) — só avisa.
+  if (typeof saved.gamesRoot === 'string' && saved.gamesRoot) {
+    try {
+      const applied = applyGamesRoot(saved.gamesRoot);
+      gamesRoot = normalizeGamesDir(saved.gamesRoot);
+      console.log(`[SETTINGS] Raiz de jogos: ${gamesRoot} (${Object.keys(applied).length} console(s))`);
+    } catch (e) {
+      console.warn('[SETTINGS] Raiz de jogos inacessível:', e.message);
     }
   }
 

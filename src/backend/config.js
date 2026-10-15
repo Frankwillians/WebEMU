@@ -61,6 +61,11 @@ export const config = {
   recompDir: abs(process.env.RECOMP_DIR || 'recomp'),
   pspDiscDir: abs(process.env.PSP_DISC_DIR || 'recomp/psp/disc'),
 
+  // App do PPSSPP Web (WebAssembly) espelhado por scripts/fetch-ppsspp-web.mjs.
+  // Serve o console "PSP (PPSSPP Web)" em /ppsspp/. Não é versionado (é pesado e
+  // de terceiros): se a pasta não existir, o console não é anunciado no seletor.
+  ppssppDir: abs(process.env.PPSSPP_DIR || 'ppsspp-web'),
+
   // Caminho do RetroArch (emulador nativo) para o modo "rodar no PC servidor".
   // Se vazio, o backend tenta achar automaticamente em locais comuns.
   retroarchPath: process.env.RETROARCH_PATH || '',

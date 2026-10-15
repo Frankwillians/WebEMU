@@ -16,6 +16,11 @@ certs/
 recomp/*
 !recomp/README.md
 
+# Motor PPSSPP Web (WebAssembly) — espelhado do projeto root-hunter/ppsspp-web
+# por scripts/fetch-ppsspp-web.mjs. É software de terceiros (GPL-2.0-or-later),
+# pesado, e por isso NÃO é versionado — fica local, como os builds recompilados.
+ppsspp-web/
+
 # Configurações locais (pasta de jogos escolhida em runtime, etc.)
 ps1emu.config.json
 

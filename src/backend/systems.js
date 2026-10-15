@@ -11,6 +11,11 @@
  *   cores[]       núcleos do EmulatorJS aceitos (id = valor de EJS_core)
  *   kind          'emulatorjs' (padrão) ou 'external' (página dedicada, ex.: PS2)
  *   page          URL da página dedicada (apenas kind === 'external')
+ *   web           rótulos do cartão da página dedicada: { title, hint, button }
+ *   alternatives  outras formas de rodar o MESMO console (ex.: PPSSPP Web dentro
+ *                 do PSP): [{ id, name, page, hint, requires? }]
+ *                 `requires` = chave de config.js; a alternativa só aparece se a
+ *                 pasta existir (senão some, evitando um botão → 404 na Vercel).
  *   retroCore     nome do core do RetroArch (.dll) para rodar nativo no PC
  *   needsBios     aviso de que uma BIOS pode ser necessária
  *
@@ -54,6 +59,11 @@ export const SYSTEMS = [
     extensions: ['.iso', '.chd', '.cso', '.isz', '.bin', '.elf', '.img', '.mds'],
     kind: 'external',
     page: '/ps2/',
+    web: {
+      title: 'Emulador de PS2 (Play! .js)',
+      hint: 'No navegador, o PS2 usa o <strong>Play! .js</strong> (experimental) em uma página própria. Lá você também pode escolher um ISO do seu aparelho.',
+      button: '▶ Abrir o emulador de PS2'
+    },
     note: 'No navegador usa o Play! .js (experimental e pesado). Rode no PC servidor com o PCSX2 para ir rápido.',
     cores: [],
     retroCore: 'pcsx2_libretro.dll'
@@ -68,7 +78,19 @@ export const SYSTEMS = [
     defaultDir: 'roms/psp',
     extensions: ['.iso', '.cso', '.pbp', '.elf'],
     cores: [{ id: 'psp', label: 'PPSSPP', note: 'Precisa de firmware/arquivos auxiliares para alguns jogos.' }],
-    retroCore: 'ppsspp_libretro.dll'
+    retroCore: 'ppsspp_libretro.dll',
+    // Alternativas: quando o build do PPSSPP Web existir, aparece um botão
+    // "PPSSPP Web (WASM)" dentro da visão do PSP. É página própria (top-level),
+    // então o ISO é escolhido dentro do PPSSPP — não a partir da biblioteca.
+    alternatives: [
+      {
+        id: 'ppsspp-web',
+        name: 'PPSSPP Web (WASM)',
+        page: '/ppsspp/',
+        hint: 'Outro emulador de PSP em WebAssembly. Abre em página própria: o ISO é escolhido dentro dele. Sem netplay.',
+        requires: 'ppssppDir'
+      }
+    ]
   },
 
   // ------------------------------------------------------------ Nintendo
@@ -477,6 +499,78 @@ export function defaultDirFor(system) {
 /** Extensões aceitas para upload/local de um sistema */
 export function extensionsFor(system) {
   return system.extensions.slice();
+}
+
+/**
+ * Nomes de pasta aceitos por sistema na SEPARAÇÃO AUTOMÁTICA de uma pasta raiz.
+ * Ex.: uma pasta `GAMES/` com subpastas `PS1/`, `SNES/`, `Mega Drive/` vira a
+ * pasta de cada console. O `id`, o `short` e o `name` do sistema já valem por
+ * conta própria; aqui ficam só os apelidos extras (abreviações e nomes comuns).
+ * A comparação ignora acentos, maiúsculas e símbolos (ver normalizeFolderName).
+ */
+const FOLDER_ALIASES = {
+  ps1: ['psx', 'playstation', 'playstation1', 'psone'],
+  ps2: ['playstation2'],
+  psp: ['playstationportable'],
+  snes: ['supernintendo', 'superfamicom', 'snes'],
+  nes: ['nintendoentertainmentsystem', 'famicom', 'nintendo'],
+  n64: ['nintendo64'],
+  gb: ['gameboy', 'gameboycolor', 'gameboyclassic', 'gbc'],
+  gba: ['gameboyadvance'],
+  nds: ['nintendods', 'ds'],
+  vb: ['virtualboy'],
+  segaMD: ['megadrive', 'genesis', 'segamegadrive', 'segagenesis', 'md'],
+  segaMS: ['mastersystem', 'segamastersystem'],
+  segaGG: ['gamegear', 'segagamegear'],
+  segaCD: ['megacd', 'segacd'],
+  sega32x: ['32x'],
+  segaSaturn: ['saturn'],
+  atari2600: ['2600'],
+  atari7800: ['7800'],
+  lynx: ['atarilynx'],
+  jaguar: ['atarijaguar'],
+  arcade: ['mame', 'fbneo', 'fba'],
+  pce: ['pcengine', 'turbografx', 'turbografx16', 'tg16'],
+  ngp: ['neogeopocket'],
+  ws: ['wonderswan', 'wonderswancolor'],
+  '3do': ['the3do'],
+  pcfx: [],
+  c64: ['commodore64'],
+  dos: ['dosbox'],
+  amiga: ['commodoreamiga']
+};
+
+/** Chave normalizada de um nome de pasta (sem acento, minúscula, só [a-z0-9]). */
+export function normalizeFolderName(name) {
+  return String(name || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, '');
+}
+
+// Índice nome-de-pasta → id de sistema (o primeiro cadastro vence, para que um
+// apelido genérico nunca sobreponha o id/short exato de outro console).
+const FOLDER_INDEX = (() => {
+  const index = new Map();
+  for (const system of SYSTEMS) {
+    const names = [system.id, system.short, system.name, ...(FOLDER_ALIASES[system.id] || [])];
+    for (const n of names) {
+      const key = normalizeFolderName(n);
+      if (key && !index.has(key)) index.set(key, system.id);
+    }
+  }
+  return index;
+})();
+
+/**
+ * Descobre a qual console pertence o nome de uma pasta (ex.: "PS1" → 'ps1',
+ * "Mega Drive" → 'segaMD'). Retorna null se não reconhecer.
+ * @param {string} name
+ * @returns {string|null}
+ */
+export function systemForFolderName(name) {
+  return FOLDER_INDEX.get(normalizeFolderName(name)) || null;
 }
 
 /**
