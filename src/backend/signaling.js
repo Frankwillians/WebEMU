@@ -46,6 +46,22 @@ const lobbyWatchers = new Set();
 
 function now() { return Date.now(); }
 
+/** Alfabeto do código da sala — sem caracteres ambíguos (o convidado digita à mão). */
+const ROOM_CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+const ROOM_CODE_LENGTH = 5;
+
+/** Sorteia um código que ainda NÃO existe: o código da sala é único. */
+function generateRoomCode() {
+  for (let attempt = 0; attempt < 200; attempt++) {
+    let code = '';
+    for (let i = 0; i < ROOM_CODE_LENGTH; i++) {
+      code += ROOM_CODE_ALPHABET.charAt(Math.floor(Math.random() * ROOM_CODE_ALPHABET.length));
+    }
+    if (!rooms.has(code)) return code;
+  }
+  return '';
+}
+
 /** Metadados sem a senha (pode ir para outros jogadores) */
 function metaPublic(room) {
   const { password, ...rest } = room.meta;
@@ -306,12 +322,25 @@ export function attachSignaling(wss) {
 
     function joinRoom(message) {
       const payload = message.payload || {};
-      const roomId = String(payload.roomId || '').trim();
-      if (!roomId) { sendError(ws, 'roomId é obrigatório'); return; }
-
       const metadata = (payload.metadata && typeof payload.metadata === 'object') ? payload.metadata : {};
-      let room = rooms.get(roomId);
+      // Criar sala é uma AÇÃO EXPLÍCITA (`create`) — só `npCreateRoom` a envia.
+      // Entrar exige que a sala JÁ exista: antes, qualquer `join` criava a sala
+      // quando o código não existia, então digitar um código qualquer "abria"
+      // uma sala nova e ainda fazia do digitador o host.
+      const create = payload.create === true;
+      let roomId = String(payload.roomId || '').trim().toUpperCase();
 
+      if (create) {
+        // Código ÚNICO: se o proposto já está em uso (ou veio vazio), o servidor
+        // sorteia outro — o definitivo volta para o cliente no peer-list.
+        if (!roomId || rooms.has(roomId)) roomId = generateRoomCode();
+        if (!roomId) { sendError(ws, 'Não foi possível gerar um código de sala'); return; }
+      } else {
+        if (!roomId) { sendError(ws, 'roomId é obrigatório'); return; }
+        if (!rooms.has(roomId)) { sendError(ws, 'Sala não encontrada'); return; }
+      }
+
+      let room = rooms.get(roomId);
       if (!room) {
         room = { id: roomId, meta: { public: true, maxPlayers: MAX_PLAYERS_DEFAULT, createdAt: now() }, peers: new Map() };
         rooms.set(roomId, room);
