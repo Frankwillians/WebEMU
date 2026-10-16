@@ -1612,8 +1612,8 @@
         '<span class="alt-hint">' + escapeHtml(alt.hint || 'Outra forma de rodar este console.') + '</span></span>' +
         '<span class="btn sm">▶ Abrir</span>';
       row.addEventListener('click', function () {
-        // PPSSPP Web é uma página própria: registrar antes de sair daqui.
-        markRecent(sys, { kind: 'external', key: 'page:' + sys.id, url: alt.page || '/ppsspp/', name: alt.name });
+        // PPSSPP Web é uma página própria: NÃO registra nos "recentes" da
+        // central. Só registra se for um jogo da biblioteca (na grade).
         location.href = toAbs(alt.page || '/ppsspp/');
       });
       box.appendChild(row);
