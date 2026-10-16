@@ -210,14 +210,16 @@ async function describeSystem(system) {
   const nativeCore = findRetroCore(system, retroarchExe);
   if (nativeCore) modes.push('host');
 
-  const alternatives = (system.alternatives || [])
-    .filter((alt) => !alt.requires || (config[alt.requires] && existsSync(config[alt.requires])))
-    .map((alt) => ({
-      id: alt.id,
-      name: alt.name,
-      page: alt.page,
-      hint: alt.hint || null
-    }));
+  // Alternativas são sempre enviadas: a página alvo (ex.: /ppsspp/) existe tanto
+  // no PC (rota do Express) quanto no site publicado (o build sobe no deploy, ver
+  // scripts/vercel-build.mjs) — a linha de "Como rodar" não pode sumir conforme
+  // quem responde a lista.
+  const alternatives = (system.alternatives || []).map((alt) => ({
+    id: alt.id,
+    name: alt.name,
+    page: alt.page,
+    hint: alt.hint || null
+  }));
 
   return {
     id: system.id,

@@ -13,9 +13,10 @@
  *   page          URL da página dedicada (apenas kind === 'external')
  *   web           rótulos do cartão da página dedicada: { title, hint, button }
  *   alternatives  outras formas de rodar o MESMO console (ex.: PPSSPP Web dentro
- *                 do PSP): [{ id, name, page, hint, requires? }]
- *                 `requires` = chave de config.js; a alternativa só aparece se a
- *                 pasta existir (senão some, evitando um botão → 404 na Vercel).
+ *                 do PSP): [{ id, name, page, hint? }]. São sempre enviadas —
+ *                 a página alvo existe nos dois modos de servir o site: no PC
+ *                 (rota /ppsspp do Express) e no site publicado (o build sobe no
+ *                 deploy por scripts/vercel-build.mjs).
  *   retroCore     nome do core do RetroArch (.dll) para rodar nativo no PC
  *   needsBios     aviso de que uma BIOS pode ser necessária
  *
@@ -79,16 +80,16 @@ export const SYSTEMS = [
     extensions: ['.iso', '.cso', '.pbp', '.elf'],
     cores: [{ id: 'psp', label: 'PPSSPP', note: 'Precisa de firmware/arquivos auxiliares para alguns jogos.' }],
     retroCore: 'ppsspp_libretro.dll',
-    // Alternativas: quando o build do PPSSPP Web existir, aparece um botão
-    // "PPSSPP Web (WASM)" dentro da visão do PSP. É página própria (top-level),
-    // então o ISO é escolhido dentro do PPSSPP — não a partir da biblioteca.
+    // Alternativas: o PPSSPP Web aparece como linha "PPSSPP Web (WASM)" dentro da
+    // visão do PSP. É página própria (top-level), então o ISO é escolhido dentro
+    // do PPSSPP — não a partir da biblioteca. A linha é sempre listada: a página
+    // /ppsspp/ existe nos dois modos (Express local e o build que sobe no deploy).
     alternatives: [
       {
         id: 'ppsspp-web',
         name: 'PPSSPP Web (WASM)',
         page: '/ppsspp/',
-        hint: 'Outro emulador de PSP em WebAssembly. Abre em página própria: o ISO é escolhido dentro dele. Sem netplay.',
-        requires: 'ppssppDir'
+        hint: 'Outro emulador de PSP em WebAssembly. Abre em página própria: o ISO é escolhido dentro dele. Sem netplay.'
       }
     ]
   },
