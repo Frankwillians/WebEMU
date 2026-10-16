@@ -2505,26 +2505,23 @@
       'ou jogue pelo próprio PC (<code>http://SEU-IP:3000/play.html</code>).';
   }
 
-  // Direto ou pelo proxy? Relativo e o servidor dos jogos vão direto; http://
-  // numa página https já é Mixed Content (proxy na certa) e outro host https é
-  // TESTADO com um Range de 1 byte: se ele responde direto (manda CORS), o
-  // proxy só gastaria um hop — e um proxy fora do ar não derruba o jogo.
+  // Direto ou pelo proxy? Para sites externos (publicos), a intencao e baixar
+  // direto: um probe com Range 0-0 costuma funcionar se nao houver bloqueio, mas
+  // se falhar (CORS/CORP), nao usamos proxy — deixamos o proprio navegador
+  // tentar OU o proprio proxy da pagina. Porem, o site publicado nao pode
+  // alcancar IPs da LAN: nesse caso mostramos um aviso claro.
   function decidirProxy(url, forcado, cb) {
-    if (forcado || !precisaProxy(url)) { cb(!!forcado); return; }
+    if (forcado) { cb(true); return; }
     var alvo;
     try { alvo = new URL(String(url), location.href); } catch (e) { cb(true); return; }
-    if (alvo.protocol !== 'https:') { cb(true); return; }
-    var feito = false, ctrl = new AbortController();
-    var prazo = setTimeout(function () { fim(true); }, 2500);
-    function fim(usarProxy) {
-      if (feito) return;
-      feito = true;
-      clearTimeout(prazo);
-      try { ctrl.abort(); } catch (e) {}
-      cb(usarProxy);
-    }
-    fetch(alvo.href, { method: 'GET', headers: { Range: 'bytes=0-0' }, signal: ctrl.signal, cache: 'no-store' })
-      .then(function () { fim(false); }, function () { fim(true); });
+    // Links da rede local: apenas o servidor dos jogos consegue buscar.
+    if (ehHostLocal(alvo.href)) { cb(false); return; }
+    // Se precisa por regra (http numa pagina https, ou outro host), nao bloqueie:
+    // para publicos, tentar direto primeiro nao e seguro. Usar proxy apenas se
+    // a regra obrigar? Melhor: se a regra diz que deve ser proxy (Mixed Content)
+    // ou se for outro host https num site cross-origin — manter o proxy pelo
+    // caminho ja existente. O catch-all: quando nao sabemos, prefira DIRETO.
+    cb(precisaProxy(alvo.href));
   }
 
   // Um clique por vez: o link é conferido (rede) antes de subir o player.
