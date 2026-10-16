@@ -2456,138 +2456,19 @@
     return accessToken ? u + '&token=' + encodeURIComponent(accessToken) : u;
   }
 
-  // Host privado/loopback (LAN, link-local, .local): só um servidor DENTRO da
-  // rede do jogador alcança esse endereço — o site publicado (Vercel) não.
-  function ehHostLocal(url) {
-    var h;
-    try { h = new URL(String(url == null ? '' : url), location.href).hostname; } catch (e) { return false; }
-    h = h.replace(/^\[|\]$/g, '');
-    return h === 'localhost' || h === '::1' ||
-      /^(127\.|10\.|192\.168\.|169\.254\.)/.test(h) ||
-      /^172\.(1[6-9]|2[0-9]|3[01])\./.test(h) ||
-      /\.(local|internal|lan|home)$/i.test(h);
-  }
-
-  function servidorAlcancaLinkLocal(url, cb) {
-  // Link da rede local só roda se quem baixa for o servidor do jogador (a base
-  // configurada = o PC). O proxy da própria página (site publicado) nunca
-  // alcança a LAN: nesse caso nem começamos o player.
-  function servidorAlcancaLinkLocal(url, cb) {
-    if (!ehHostLocal(url)) { if (cb) cb(true); return; }
-    var base = baseHttpBloqueada() ? '' : getApiBase();
-    if (!base) {
-      var okSelf = ehHostLocal(location.origin);
-      if (cb) cb(okSelf); return;
-    }
-    // Confirma que a base responde antes de mandar o jogo para lá
-    var fezCb = false;
-    var respondeu = api('/api/health').then(function (r) {
-      var ok = !!r.ok;
-      if (!fezCb) { fezCb = true; if (cb) cb(ok); }
-    }).catch(function () {
-      if (!fezCb) { fezCb = true; if (cb) cb(false); }
-    });
-    var prazo = new Promise(function (res) {
-      setTimeout(function () { res(false); }, 4000);
-    });
-    Promise.race([respondeu, prazo]).then(function (ok) {
-      if (!fezCb) { fezCb = true; if (cb) cb(ok); }
-    });
-  }
-
-  // Por que o link da rede local não pôde ser aberto (ver servidorAlcancaLinkLocal).
-  function avisoLinkLocal() {
-    if (baseHttpBloqueada()) {
-      return 'O endereço de <b>🌐 Servidor</b> é <code>http://</code> e uma página <b>https</b> não fala com <code>http://</code>. ' +
-        'Aponte para o HTTPS do PC (ex. <code>https://SEU-IP:3443</code>) ou para um túnel ativo.';
-    }
-    if (getApiBase()) {
-      return 'O servidor dos jogos (<b>' + escapeHtml(serverHostLabel()) + '</b>) não respondeu. ' +
-        'Se ele é um túnel, suba o túnel de novo e reaponte em <b>🌐 Servidor</b>.';
-    }
-    return 'Este link está na sua <b>rede local</b> e o site publicado não alcança a sua rede. ' +
-      'Em <b>🌐 Servidor</b>, aponte para o seu PC (o HTTPS do PC, ex. <code>https://SEU-IP:3443</code>, ou um túnel ativo) — ' +
-      'ou jogue pelo próprio PC (<code>http://SEU-IP:3000/play.html</code>).';
-  }
-
-  // Direto ou pelo proxy? Para sites externos (públicos), tentamos baixar
-  // direto primeiro. Só forçamos proxy quando:
-  // - o checkbox marcou "Forçar pelo servidor";
-  // - o link é http numa página https (Mixed Content);
-  // - o link é https cross-origin mas o probe direto falha (CORS/CORP/etc.).
-  // Links da rede local nunca passam por este probe: a decisão já foi feita
-  // pelo servidorAlcancaLinkLocal.
-  function decidirProxy(url, forcado, cb) {
-    if (forcado) { cb(true); return; }
-    var alvo;
-    try { alvo = new URL(String(url), location.href); } catch (e) { cb(true); return; }
-    // Links da rede local: apenas o servidor dos jogos consegue buscar.
-    if (ehHostLocal(alvo.href)) { cb(false); return; }
-    // http numa página https → Mixed Content → proxy obrigatório.
-    if (location.protocol === 'https:' && alvo.protocol === 'http:') {
-      cb(true); return;
-    }
-    // Mesmo origem? direto.
-    if (alvo.origin === location.origin) { cb(false); return; }
-    // Na página http, o navegador permite → direto.
-    if (location.protocol !== 'https:') { cb(false); return; }
-    // Página https + host externo: http → Mixed Content → proxy; https → tentamos direto primeiro.
-    if (alvo.protocol === 'http:') { cb(true); return; }
-    // Página https + host externo https: tentar direto com Range 0-0; se
-    // falhar por CORS/preflight, usamos proxy (base configurada ou própria origem).
-    var feito = false, ctrl = new AbortController();
-    var prazo = setTimeout(function () { fim(true); }, 2500);
-    function fim(usarProxy) {
-      if (feito) return;
-      feito = true;
-      clearTimeout(prazo);
-      try { ctrl.abort(); } catch (e) {}
-      cb(usarProxy);
-    }
-    try {
-      fetch(alvo.href, {
-        method: 'GET',
-        headers: { Range: 'bytes=0-0' },
-        signal: ctrl.signal,
-        cache: 'no-store',
-        mode: 'cors'
-      })
-        .then(function () { fim(false); })
-        .catch(function () { fim(true); });
-    } catch (e) {
-      fim(true);
-    }
-  }
-
-  // Um clique por vez: o link é conferido (rede) antes de subir o player.
-  var abrindoLink = false;
-
-  // Abre um jogo do EmulatorJS por URL: confere o link e decide o caminho do
-  // download ANTES de subir o player, para o jogador ver o motivo em vez do
-  // "Erro de rede" do núcleo.
-  function abrirPorUrl(sys, info, fim) {
-    servidorAlcancaLinkLocal(info.url, function (ok) {
-      if (!ok) { fim(); toast(avisoLinkLocal(), 'err'); return; }
-      decidirProxy(info.url, info.forcado, function (usarProxy) {
-        fim();
-        writeJSON(LS.session, {
-          system: sys.id,
-          core: getCoreFor(sys),
-          mode: 'web',
-          source: 'url',
-          url: info.url,
-          name: info.name,
-          proxy: usarProxy
-        });
-        startPlayer();
-      });
-    });
-  }
-
   function playGame(sys, game) {
     if (getMode(sys) === 'host') { launchNative(sys, game); return; }
     if (sys.kind === 'external') { openExternal(sys, game); return; }
-    abrirPorUrl(sys, { url: game.url, name: game.fileName || game.name, forcado: false }, function () {});
+    writeJSON(LS.session, {
+      system: sys.id,
+      core: getCoreFor(sys),
+      mode: 'web',
+      source: 'url',
+      url: game.url,
+      name: game.fileName || game.name,
+      proxy: precisaProxy(game.url)
+    });
+    startPlayer();
   }
 
   // Abre um jogo a partir de um link (URL) direto para a ROM/ISO. O arquivo é
@@ -2603,31 +2484,31 @@
     try { abs = new URL(raw, location.href); } catch (e) { toast('Link inválido.', 'err'); return; }
     if (abs.protocol !== 'http:' && abs.protocol !== 'https:') { toast('Use um link http(s).', 'err'); return; }
     // O checkbox força o download pelo servidor; além dele, o proxy entra
-    // sozinho quando o link vem de fora (ver precisaProxy/decidirProxy).
-    var forcado = !!(el('rom-url-proxy') && el('rom-url-proxy').checked);
+    // sozinho quando a página é HTTPS e o link é de outro host (ver
+    // precisaProxy).
+    var proxy = !!(el('rom-url-proxy') && el('rom-url-proxy').checked) || precisaProxy(abs.href);
     var parts = abs.pathname.split('/').filter(Boolean);
     var fileName = parts.length ? decodeURIComponent(parts[parts.length - 1]) : 'jogo.iso';
     // Cataloga o link na coleção do console (persistida) antes de abrir.
     saveLink(sys, abs.href, fileName);
-    if (abrindoLink) return;
-    abrindoLink = true;
-    var fim = function () { abrindoLink = false; };
     if (sys.kind === 'external') {
-      // PS2 (Play! .js) tem página própria: ela baixa o disco por Range, com o
-      // mesmo bloqueio da ROM (Mixed Content/CORS) — leva o endereço decidido.
-      servidorAlcancaLinkLocal(abs.href, function (ok) {
-        if (!ok) { fim(); toast(avisoLinkLocal(), 'err'); return; }
-        decidirProxy(abs.href, forcado, function (usarProxy) {
-          fim();
-          openExternal(sys, { url: abs.href, fileName: fileName, name: fileName, size: 0 }, usarProxy);
-        });
-      });
+      // PS2 (Play! .js) tem página própria.
+      openExternal(sys, { url: abs.href, fileName: fileName, name: fileName, size: 0 });
       return;
     }
-    abrirPorUrl(sys, { url: abs.href, name: fileName, forcado: forcado }, fim);
+    writeJSON(LS.session, {
+      system: sys.id,
+      core: getCoreFor(sys),
+      mode: 'web',
+      source: 'url',
+      name: fileName,
+      url: abs.href,
+      proxy: proxy
+    });
+    startPlayer();
   }
 
-  function openExternal(sys, game, usarProxy) {
+  function openExternal(sys, game) {
     var page = toAbs(sys.page || '/ps2/');
     if (!game) {
       // Abrir só a página (ex.: PPSSPP Web) também conta como recente.
@@ -2641,10 +2522,7 @@
     // e o jogo está fora do servidor dos jogos, ela cai no mesmo bloqueio da
     // ROM (Mixed Content/CORS): passa o endereço já pelo proxy.
     var alvo = toAbs(game.url);
-    // `usarProxy` vem de quem já decidiu o caminho (decidirProxy); sem ele,
-    // decide pelo host — jogo da biblioteca do servidor segue direto.
-    var mandaProxy = (usarProxy === undefined) ? precisaProxy(alvo) : usarProxy;
-    if (mandaProxy) alvo = romProxyUrl(alvo);
+    if (precisaProxy(alvo)) alvo = romProxyUrl(alvo);
     location.href = page +
       '?url=' + encodeURIComponent(alvo) +
       '&name=' + encodeURIComponent(game.fileName || game.name || 'game.iso') +
@@ -2816,7 +2694,7 @@
       // source 'url' cobre o link colado e o jogo da pasta do servidor; a URL
       // relativa /roms/... denuncia a biblioteca da rede (selo rede).
       markRecent(sys, {
-        kind: session.url && String(session.url).indexOf('/roms/') === 0 ? 'network' : 'url',
+        kind: session.url && session.url.indexOf('/roms/') === 0 ? 'network' : 'url',
         url: session.url, name: session.name, key: 'url:' + session.url
       });
     }
@@ -2884,7 +2762,7 @@
       var url = toAbs(bios.url);
       // BIOS fora do servidor dos jogos numa página https: mesmo bloqueio da
       // ROM (Mixed Content/CORS) — passa pelo proxy.
-      if (precisaProxy(url)) {
+      if (precisaProxy(url) || baseHttpBloqueada()) {
         return Promise.resolve(romProxyUrl(url));
       }
       return Promise.resolve(url);
