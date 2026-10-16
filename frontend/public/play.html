@@ -2884,7 +2884,7 @@
       var url = toAbs(bios.url);
       // BIOS fora do servidor dos jogos numa página https: mesmo bloqueio da
       // ROM (Mixed Content/CORS) — passa pelo proxy.
-      if (precisaProxy(url) || baseHttpBloqueada()) {
+      if (precisaProxy(url)) {
         return Promise.resolve(romProxyUrl(url));
       }
       return Promise.resolve(url);
