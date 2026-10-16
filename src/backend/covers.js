@@ -13,7 +13,9 @@
  * acordo com o nome e o console".
  *
  * O índice é a listagem do host `thumbnails.libretro.com` (o mesmo conteúdo do
- * GitHub, porém navegável) e fica em cache na memória por 24 h.
+ * GitHub, porém navegável) e fica em cache na memória por 24 h. As imagens
+ * também saem desse host — é ele que resolve os *symlinks* do repositório
+ * (ver `THUMBS_HOST`).
  *
  * `sendCover` é a ponta HTTP: vive aqui para o **mesmo** código atender o
  * servidor local (`/api/cover`) e a função serverless da Vercel
@@ -26,7 +28,11 @@ import { getSystem, boxartRepos } from './systems.js';
 import { isBlockedProxyHost } from './proxy.js';
 
 const COVER_FOLDERS = ['Named_Boxarts', 'Named_Snaps', 'Named_Titles'];
-const COVER_BASE = 'https://raw.githubusercontent.com/libretro-thumbnails';
+// As capas saem do MESMO host navegável usado no índice. O
+// `raw.githubusercontent.com` não serve: boa parte do repositório é *symlink*
+// (vários títulos apontam para um arquivo só) e ele entrega o **texto do link**
+// ("ActRaiser (USA).png", 19 bytes) em vez da imagem — era o que deixava a capa
+// quebrada. O host navegável resolve o symlink e devolve o PNG.
 const THUMBS_HOST = 'https://thumbnails.libretro.com';
 
 const INDEX_TTL = 24 * 60 * 60 * 1000; // 24h
@@ -170,6 +176,11 @@ export async function coverIndex(repo) {
   return files;
 }
 
+/** URL de um arquivo de capa no host navegável (`repo` com `_` → espaço). */
+function coverFileUrl(repo, folder, file) {
+  return `${THUMBS_HOST}/${encodeURIComponent(repo.replace(/_/g, ' '))}/${folder}/${encodeURIComponent(file)}`;
+}
+
 /** Busca exata (HEAD) nos candidatos: pasta × nome sanitizado. */
 async function resolveExact(repos, rawName) {
   const norm = normalizeCoverName(rawName);
@@ -178,10 +189,12 @@ async function resolveExact(repos, rawName) {
     for (const folder of COVER_FOLDERS) {
       for (const variant of variants) {
         if (!variant) continue;
-        const url = `${COVER_BASE}/${repo}/master/${folder}/${encodeURIComponent(variant)}.png`;
+        const url = coverFileUrl(repo, folder, `${variant}.png`);
         try {
           const r = await fetch(url, { method: 'HEAD' });
-          if (r.ok) return url;
+          // Só aceitamos resposta que é imagem: um 200 com HTML/texto (página
+          // de erro de rede, host trocado) não pode virar "capa".
+          if (r.ok && String(r.headers.get('content-type') || '').startsWith('image/')) return url;
         } catch {
           // tenta o próximo candidato
         }
@@ -199,10 +212,15 @@ export async function resolveCoverUrl(repos, rawName) {
   const exact = await resolveExact(repos, rawName);
   if (exact) return exact;
 
+  // Na função serverless não há memória entre chamadas nem tempo para indexar o
+  // catálogo (milhares de nomes): a busca aproximada ficaria pendurada até o
+  // limite da função e voltaria vazia. Lá vale só o casamento exato, que é rápido.
+  if (process.env.VERCEL) return null;
+
   for (const repo of repos) {
     const files = await coverIndex(repo);
     const file = matchCoverFile(files, rawName);
-    if (file) return `${COVER_BASE}/${repo}/master/Named_Boxarts/${encodeURIComponent(file)}`;
+    if (file) return coverFileUrl(repo, 'Named_Boxarts', file);
   }
   return null;
 }
@@ -213,8 +231,10 @@ function streamCover(img, res) {
   res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Content-Type', img.headers.get('content-type') || 'image/png');
-  const len = img.headers.get('content-length');
-  if (len) res.setHeader('Content-Length', len);
+  // Content-Length NÃO vem do upstream: o corpo pode chegar descomprimido
+  // (gzip) e um tamanho errado derruba a imagem no navegador
+  // (ERR_CONTENT_LENGTH_MISMATCH) e desalinha a conexão HTTP. Sem ele, o Node
+  // fecha a resposta em chunks.
   Readable.fromWeb(img.body).pipe(res);
 }
 

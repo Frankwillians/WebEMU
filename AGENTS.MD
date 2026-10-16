@@ -324,11 +324,16 @@ Mídia e inputs:    WebRTC (P2P) — o HOST emula e transmite; convidados só ma
   sem duplicar, teto de 100 por console). Ambos ficam no painel **⋯ Mais** da
   barra do topo (fora dos consoles).
 - **Capa dos links:** `linkCard` pede a capa por `coverUrlByName(sys, nome)` e
-  `coverUrlManual(sys, url)`, que compartilham `coverEndpoint` — sempre na origem
-  da própria página (`/api/cover?system=&name=|url=`), inclusive no site
-  publicado. O backend (`covers.js`) tenta o nome exato no libretro-thumbnails e,
-  se não achar, uma busca **aproximada** dentro daquele console; renomear refaz a
-  capa. Se o nome ainda errar, `link.cover` guarda uma **URL manual** (o 🖼).
+  `coverUrlManual(sys, url)`, que compartilham `coverEndpoint`
+  (`/api/cover?system=&name=|url=`). A capa vive no **servidor de jogos
+  configurado** (a base; sem base utilizável — ou base `http://` numa página
+  `https` — cai na própria origem da página): o catálogo é externo, mas o índice
+  da busca aproximada é cacheado em memória e a função da Vercel não tem tempo
+  nem memória para ele — **lá só vale o nome exato**. O backend (`covers.js`)
+  tenta o nome exato no host navegável do libretro-thumbnails (HEAD, aceitando só
+  resposta que é imagem) e, se não achar, uma busca **aproximada** dentro daquele
+  console; renomear refaz a capa. Se o nome ainda errar, `link.cover` guarda uma
+  **URL manual** (o 🖼).
 - **Recentes ("Continue jogando"):** a grade do console mostra jogos do servidor
   (selo *rede*), links salvos (selo *link*) e, por último, os recentes que não
   vêm desses dois (`localStorage['ps1emu.recent']`, por console, teto de 12,
@@ -405,8 +410,11 @@ Mensagens do sinalizador (`src/backend/signaling.js`): `join`, `leave`, `offer`,
     (`/roms/…`, o servidor configurado) continua **direto**: já responde com
     CORS/CORP. O mesmo vale para a **BIOS** e para a página própria do PS2
     (`/ps2/?url=`).
-    A **capa** não cai nisso: ela é sempre pedida à origem da própria página
-    (`/api/cover`), que resolve por nome + console sem tocar no backend local.
+    A **capa** não cai nisso: ela é resolvida por nome + console (catálogo
+    externo) no servidor configurado — ou na própria origem da página quando não
+    há base utilizável. No site publicado quem resolve é a função `/api/cover`,
+    que só casa o **nome exato** (o índice da busca aproximada não cabe no tempo
+    da função).
     **Link com endereço local:** um jogo da pasta do servidor aberto por link
     pode chegar com o endereço do **próprio PC** (`http://localhost:3000/roms/…`,
     copiado da página local) ou com um **IP antigo da LAN** (o roteador troca o IP
@@ -569,7 +577,8 @@ resultado **verificável** (teste/validação) antes de considerar pronto.
 | PSP/DOS não iniciam no celular | Falta contexto seguro + COOP/COEP (`npm run cert`, HTTPS) |
 | 404 em `/api/systems/:id/games` ao abrir um console no site publicado | A função da Vercel só recebe um segmento; o front agora usa `health.library` e **não chama** rotas de disco quando `false` (mostra aviso + links). Para a biblioteca do PC, abra pelo backend (`?server=`, ver §6.3) |
 | Netplay sem TURN no site publicado | O ICE era `/api/netplay/ice` (multi-segmento) → 404. Agora é `/api/ice` (um segmento), servido pelo Express e pela função |
-| Capa bloqueada no site publicado | Não deveria: a capa é pedida à própria origem (`/api/cover`) e resolvida só por nome + console |
+| Capa quebrada / "capa" que é texto (ou `ERR_CONTENT_LENGTH_MISMATCH`) | O `raw.githubusercontent.com` entrega o **texto do symlink** (boa parte do libretro-thumbnails aponta vários títulos para um arquivo só) e o `streamCover` copiava o `Content-Length` do upstream (que pode vir gzip). As capas saem do host navegável (`THUMBS_HOST`, que resolve o symlink) e o tamanho é do Node (chunked). Só entram respostas `image/*` |
+| Capa some só no site publicado | Sem base utilizável, a resolução é a da própria página — e a **função da Vercel só casa o nome exato** (o índice da busca aproximada estoura o tempo da função). Aponte a base (`?server=`) para ter a busca aproximada |
 | "Erro de rede" (EmulatorJS) ao abrir um jogo por **link** num console | A página `https` é cross-origin isolated: link de outro host (ou `http://`) é bloqueado por CORS/Mixed Content. `precisaProxy(url)` põe o jogo no proxy `/api/rom` (ver §9.10). Se o link traz o endereço **local** (`localhost`, ou o IP antigo da LAN) numa pasta do servidor, ele passa a apontar para o servidor configurado — nunca para o proxy, que recusa `localhost` (403) |
 | Conectar do site HTTPS ao PC da LAN | **Mixed Content** (bloqueio do navegador, não é header). Abra `http://IP:3000/play.html`, use o **HTTPS** do PC (`npm run cert` → `https://IP:3443`, com `?server=`) ou um túnel HTTPS. O preflight **PNA** já é respondido |
 | Jogar com quem está em **outra rede** | **👥 Jogar em rede** no modo 🌐 Online (netplay); ou um túnel HTTPS que **você** sobe (`cloudflared`/`ngrok`/Tailscale) + `PUBLIC_URL` para levar a biblioteca. O túnel expõe o PC na internet — considere `ACCESS_TOKEN` |
