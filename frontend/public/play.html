@@ -2510,23 +2510,53 @@
       'ou jogue pelo próprio PC (<code>http://SEU-IP:3000/play.html</code>).';
   }
 
-  // Direto ou pelo proxy? Para sites externos (publicos), a intencao e baixar
-  // direto: um probe com Range 0-0 costuma funcionar se nao houver bloqueio, mas
-  // se falhar (CORS/CORP), nao usamos proxy — deixamos o proprio navegador
-  // tentar OU o proprio proxy da pagina. Porem, o site publicado nao pode
-  // alcancar IPs da LAN: nesse caso mostramos um aviso claro.
+  // Direto ou pelo proxy? Para sites externos (públicos), tentamos baixar
+  // direto primeiro. Só forçamos proxy quando:
+  // - o checkbox marcou "Forçar pelo servidor";
+  // - o link é http numa página https (Mixed Content);
+  // - o link é https cross-origin mas o probe direto falha (CORS/CORP/etc.).
+  // Links da rede local nunca passam por este probe: a decisão já foi feita
+  // pelo servidorAlcancaLinkLocal.
   function decidirProxy(url, forcado, cb) {
     if (forcado) { cb(true); return; }
     var alvo;
     try { alvo = new URL(String(url), location.href); } catch (e) { cb(true); return; }
     // Links da rede local: apenas o servidor dos jogos consegue buscar.
     if (ehHostLocal(alvo.href)) { cb(false); return; }
-    // Se precisa por regra (http numa pagina https, ou outro host), nao bloqueie:
-    // para publicos, tentar direto primeiro nao e seguro. Usar proxy apenas se
-    // a regra obrigar? Melhor: se a regra diz que deve ser proxy (Mixed Content)
-    // ou se for outro host https num site cross-origin — manter o proxy pelo
-    // caminho ja existente. O catch-all: quando nao sabemos, prefira DIRETO.
-    cb(precisaProxy(alvo.href));
+    // http numa página https → Mixed Content → proxy obrigatório.
+    if (location.protocol === 'https:' && alvo.protocol === 'http:') {
+      cb(true); return;
+    }
+    // Mesmo origem? direto.
+    if (alvo.origin === location.origin) { cb(false); return; }
+    // Na página http, o navegador permite → direto.
+    if (location.protocol !== 'https:') { cb(false); return; }
+    // Página https + host externo: http → Mixed Content → proxy; https → tentamos direto primeiro.
+    if (alvo.protocol === 'http:') { cb(true); return; }
+    // Página https + host externo https: tentar direto com Range 0-0; se
+    // falhar por CORS/preflight, usamos proxy (base configurada ou própria origem).
+    var feito = false, ctrl = new AbortController();
+    var prazo = setTimeout(function () { fim(true); }, 2500);
+    function fim(usarProxy) {
+      if (feito) return;
+      feito = true;
+      clearTimeout(prazo);
+      try { ctrl.abort(); } catch (e) {}
+      cb(usarProxy);
+    }
+    try {
+      fetch(alvo.href, {
+        method: 'GET',
+        headers: { Range: 'bytes=0-0' },
+        signal: ctrl.signal,
+        cache: 'no-store',
+        mode: 'cors'
+      })
+        .then(function () { fim(false); })
+        .catch(function () { fim(true); });
+    } catch (e) {
+      fim(true);
+    }
   }
 
   // Um clique por vez: o link é conferido (rede) antes de subir o player.
