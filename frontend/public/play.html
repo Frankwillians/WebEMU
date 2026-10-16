@@ -2816,7 +2816,7 @@
       // source 'url' cobre o link colado e o jogo da pasta do servidor; a URL
       // relativa /roms/... denuncia a biblioteca da rede (selo rede).
       markRecent(sys, {
-        kind: session.url && session.url.indexOf('/roms/') === 0 ? 'network' : 'url',
+        kind: session.url && String(session.url).indexOf('/roms/') === 0 ? 'network' : 'url',
         url: session.url, name: session.name, key: 'url:' + session.url
       });
     }
