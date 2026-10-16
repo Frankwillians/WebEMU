@@ -2469,6 +2469,11 @@
   }
 
   function servidorAlcancaLinkLocal(url, cb) {
+  // Link da rede local só roda se quem baixa for o servidor do jogador (a base
+  // configurada = o PC). O proxy da própria página (site publicado) nunca
+  // alcança a LAN: nesse caso nem começamos o player.
+  function servidorAlcancaLinkLocal(url, cb) {
+    if (!ehHostLocal(url)) { if (cb) cb(true); return; }
     var base = baseHttpBloqueada() ? '' : getApiBase();
     if (!base) {
       var okSelf = ehHostLocal(location.origin);
