@@ -407,6 +407,17 @@ Mensagens do sinalizador (`src/backend/signaling.js`): `join`, `leave`, `offer`,
     (`/ps2/?url=`).
     A **capa** não cai nisso: ela é sempre pedida à origem da própria página
     (`/api/cover`), que resolve por nome + console sem tocar no backend local.
+    **Link com endereço local:** um jogo da pasta do servidor aberto por link
+    pode chegar com o endereço do **próprio PC** (`http://localhost:3000/roms/…`,
+    copiado da página local) ou com um **IP antigo da LAN** (o roteador troca o IP
+    do PC). De outra máquina isso não abre — e o proxy **recusa** `localhost`
+    (403). Quando o caminho é de uma pasta do servidor (`/roms`, `/ps2roms`,
+    `/disc`, `/recomp`, `/bios`) e o endereço é local, `normalizarLinkDoServidor`
+    troca **só o endereço** pelo do servidor configurado (o arquivo é o mesmo lá).
+    Arquivo servido pelo próprio servidor dos jogos nunca passa pelo proxy
+    (`podeBaixarDireto`), mesmo com o "Baixar pelo servidor desta página" marcado
+    — esse campo **vem marcado por padrão** e era o que transformava esses links
+    em 403/"Erro de rede".
     Uma página HTTPS **não** consegue falar direto com API HTTP da LAN
     (`/api/health`, `/api/systems`): o navegador bloqueia. Para
     jogar pelos arquivos do PC, abra o próprio `http://IP:3000/play.html`.
@@ -559,7 +570,7 @@ resultado **verificável** (teste/validação) antes de considerar pronto.
 | 404 em `/api/systems/:id/games` ao abrir um console no site publicado | A função da Vercel só recebe um segmento; o front agora usa `health.library` e **não chama** rotas de disco quando `false` (mostra aviso + links). Para a biblioteca do PC, abra pelo backend (`?server=`, ver §6.3) |
 | Netplay sem TURN no site publicado | O ICE era `/api/netplay/ice` (multi-segmento) → 404. Agora é `/api/ice` (um segmento), servido pelo Express e pela função |
 | Capa bloqueada no site publicado | Não deveria: a capa é pedida à própria origem (`/api/cover`) e resolvida só por nome + console |
-| "Erro de rede" (EmulatorJS) ao abrir um jogo por **link** num console | A página `https` é cross-origin isolated: link de outro host (ou `http://`) é bloqueado por CORS/Mixed Content. `precisaProxy(url)` põe o jogo no proxy `/api/rom` (ver §9.10) |
+| "Erro de rede" (EmulatorJS) ao abrir um jogo por **link** num console | A página `https` é cross-origin isolated: link de outro host (ou `http://`) é bloqueado por CORS/Mixed Content. `precisaProxy(url)` põe o jogo no proxy `/api/rom` (ver §9.10). Se o link traz o endereço **local** (`localhost`, ou o IP antigo da LAN) numa pasta do servidor, ele passa a apontar para o servidor configurado — nunca para o proxy, que recusa `localhost` (403) |
 | Conectar do site HTTPS ao PC da LAN | **Mixed Content** (bloqueio do navegador, não é header). Abra `http://IP:3000/play.html`, use o **HTTPS** do PC (`npm run cert` → `https://IP:3443`, com `?server=`) ou um túnel HTTPS. O preflight **PNA** já é respondido |
 | Jogar com quem está em **outra rede** | **👥 Jogar em rede** no modo 🌐 Online (netplay); ou um túnel HTTPS que **você** sobe (`cloudflared`/`ngrok`/Tailscale) + `PUBLIC_URL` para levar a biblioteca. O túnel expõe o PC na internet — considere `ACCESS_TOKEN` |
 | "Conectado a https://web-emu.vercel.app" ao digitar um IP | `getApiBase` lendo a base com `JSON.parse` (gravada crua) — aponte com `?server=` (grava string crua); `normalizarBase` |
