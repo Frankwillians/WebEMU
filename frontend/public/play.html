@@ -383,7 +383,9 @@
       touch-action: none; cursor: pointer;
       box-shadow: 0 3px 0 rgba(0,0,0,.45), inset 0 1px 0 rgba(255,255,255,.07);
       transition: transform .05s ease, background .05s ease, box-shadow .05s ease;
-      backdrop-filter: blur(4px);
+      /* Sem backdrop-filter: os botões ficam SOBRE o canvas do jogo, e o
+         desfoque do fundo seria refeito a cada quadro — no celular isso pesa
+         muito. O fundo já é 92% opaco, então o visual não muda. */
     }
     .np-btn.round { border-radius: 50%; }
     .np-btn.on {
@@ -428,8 +430,8 @@
       display: none; position: absolute; z-index: 12;
       top: calc(8px + env(safe-area-inset-top)); right: calc(8px + env(safe-area-inset-right));
       width: 42px; height: 42px; border-radius: 12px; border: 1px solid #3a4d6b;
-      background: rgba(16,23,36,.72); color: #e8eefc; font-size: 18px; font-weight: 700;
-      place-items: center; cursor: pointer; backdrop-filter: blur(6px);
+      background: rgba(16,23,36,.86); color: #e8eefc; font-size: 18px; font-weight: 700;
+      place-items: center; cursor: pointer;
     }
     body.fs-on .fs-exit { display: grid; }
     /* Modo tela cheia por CSS — usado no iPhone, onde a Fullscreen API não
@@ -2790,6 +2792,13 @@
     // Se o host está numa sala, começa (ou retoma) a transmissão da partida
     // para os convidados que já estão esperando.
     npHostRecheckStream();
+    // Memória: a grade do console guarda uma capa decodificada por jogo. No
+    // celular, depois de rolar a lista (centenas de jogos), isso passa de
+    // centenas de MB e o navegador fica sob pressão de memória — o jogo começa
+    // a engasgar. Enquanto o jogo roda a grade não é necessária: ela volta a
+    // ser montada ao abrir o console (openSystem -> loadGames).
+    var lista = el('games-list');
+    if (lista) lista.innerHTML = '';
   }
 
   function bootOverlay(msg) {
@@ -4169,7 +4178,10 @@
       this.polling = true;
       this.prevButtons = [];
       this.prevAxes = [];
-      this.loop();
+      // Um callback só, reaproveitado: criar função nova a cada quadro
+      // (this.loop.bind) só dá trabalho ao coletor de lixo no celular.
+      if (!this.agendar) this.agendar = this.loop.bind(this);
+      requestAnimationFrame(this.agendar);
     },
     parar: function () { this.polling = false; },
     loop: function () {
@@ -4179,7 +4191,7 @@
       // Cada navegador = 1 jogador na sala = 1 porta de controle no console.
       var gp = gps[this.gamepadIndex];
       if (gp) this.processar(gp);
-      requestAnimationFrame(this.loop.bind(this));
+      requestAnimationFrame(this.agendar);
     },
     // Mostra seletor se houver múltiplos gamepads
     mostrarSeletor: function () {

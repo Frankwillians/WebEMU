@@ -594,6 +594,7 @@ resultado **verificável** (teste/validação) antes de considerar pronto.
 | Dois peers do mesmo IP | Anti-clone por IP (sem token) |
 | Lobby some na Vercel | Funções serverless não compartilham memória — limitação conhecida |
 | Controle na tela não responde (mobile) | `npSendInput` precisa aplicar local em solo/host (não só em sala). O stick emite analógico (16-19) **e** digital (4-7); sem analógico no core, o digital mantém o controle funcionando. O gamepad nativo do EmulatorJS é escondido por CSS para não duplicar |
+| Jogo engasga no celular depois de um tempo | O navegador segura as capas da biblioteca e qualquer `backdrop-filter` sobre o canvas é refeito a cada quadro. `showPlayer` libera a grade (`#games-list`, remontada no `openSystem`) e o pad não usa desfoque. O core roda estável a 60 fps (medido), então o resto é aquecimento do aparelho |
 | Push "falha" no PowerShell | stderr do git; confirme `a..b master -> master` |
 
 ---
