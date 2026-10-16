@@ -1598,6 +1598,12 @@
   // mesmo console). Só aparece quando o build estiver no servidor (`requires`).
   // As alternativas entram como LINHAS do próprio cartão "🧭 Como rodar" — sem
   // cartão separado (a UI fica enxuta e as opções de rodar ficam num lugar só).
+  //
+  // Abrir uma alternativa é abrir uma PÁGINA, não jogar: não entra nos
+  // "recentes" do console (a grade mostra só jogos de verdade).
+  function paginasAlternativas(sys) {
+    return (sys.alternatives || []).map(function (alt) { return alt.page; });
+  }
   function renderAlternatives(sys) {
     var box = el('mode-options');
     if (!box) return;
@@ -1611,11 +1617,7 @@
         '<span class="alt-name"><b>' + escapeHtml(alt.name) + '</b>' +
         '<span class="alt-hint">' + escapeHtml(alt.hint || 'Outra forma de rodar este console.') + '</span></span>' +
         '<span class="btn sm">▶ Abrir</span>';
-      row.addEventListener('click', function () {
-        // PPSSPP Web é uma página própria: NÃO registra nos "recentes" da
-        // central. Só registra se for um jogo da biblioteca (na grade).
-        location.href = toAbs(alt.page || '/ppsspp/');
-      });
+      row.addEventListener('click', function () { location.href = toAbs(alt.page || '/'); });
       box.appendChild(row);
     });
   }
@@ -1878,6 +1880,10 @@
     getRecent(sys.id).forEach(function (item) {
       // 'url' e 'network' já aparecem como link/servidor — não duplica.
       if (item.kind === 'url' || item.kind === 'network') return;
+      // Abrir uma página alternativa (ex.: PPSSPP Web no PSP) não é jogar: não
+      // entra nos recentes. A checagem também esconde o que versões antigas
+      // da central gravaram.
+      if (item.url && paginasAlternativas(sys).indexOf(item.url) !== -1) return;
       box.appendChild(recentCard(sys, item));
     });
 
@@ -1915,7 +1921,7 @@
   // no servidor local é a rota `/api/cover` do Express e no site publicado é a
   // função `/api/cover` da Vercel — mesmo código, sem depender do PC dos jogos.
   function coverEndpoint(sys, query) {
-    var base = precisaProxy() ? '' : getApiBase();
+    var base = baseHttpBloqueada() ? '' : getApiBase();
     if (!base && IS_FILE) base = 'http://localhost:3000';
     return base + '/api/cover?system=' + encodeURIComponent(sys.id) + '&' + query;
   }
@@ -2409,12 +2415,45 @@
   }
 
   // --------------------------------------------------------------- launching
-  // Detecta se precisamos usar o proxy (HTTPS no Vercel → HTTP no backend local).
-  // Mixed Content bloqueia HTTP direto; o proxy /api/rom no Vercel resolve isso.
-  function precisaProxy() {
+  // Base da API inutilizável: página HTTPS não conversa com servidor HTTP
+  // (Mixed Content). Nesse caso a capa e o proxy saem da PRÓPRIA origem.
+  function baseHttpBloqueada() {
     try {
       return location.protocol === 'https:' && /^http:/i.test(getApiBase());
     } catch (e) { return false; }
+  }
+
+  // Precisa do proxy /api/rom? Precisa quando a página é HTTPS e o arquivo vem
+  // de OUTRO host que não seja o servidor dos jogos: (a) http:// é Mixed
+  // Content e (b) o site publicado é cross-origin isolated (COEP
+  // require-corp), então um host sem CORS também é bloqueado — nos dois casos o
+  // EmulatorJS só mostra "Erro de rede". Jogo relativo (/roms/…) e o próprio
+  // servidor configurado já respondem com CORS/CORP: continuam diretos.
+  function precisaProxy(url) {
+    if (location.protocol !== 'https:') return false;
+    var s = String(url == null ? '' : url).trim();
+    if (!/^[a-z][a-z0-9+.-]*:\/\//i.test(s)) return false;   // relativo → direto
+    if (/^(blob|data):/i.test(s)) return false;
+    try {
+      var origem = new URL(s).origin;
+      if (origem === location.origin) return false;
+      var base = getApiBase();
+      // Servidor dos jogos: já responde com CORS/CORP — mas só vale se ele é
+      // alcançável daqui (base http numa página https não é).
+      if (base && !baseHttpBloqueada()) {
+        try { if (origem === new URL(base).origin) return false; } catch (e) {}
+      }
+      return true;
+    } catch (e) { return false; }
+  }
+
+  // URL do proxy de ROM. A rota /api/rom existe no servidor dos jogos E na
+  // função do site publicado; quando a base configurada é http:// (bloqueada
+  // numa página https), o proxy é o da própria origem da página.
+  function romProxyUrl(url) {
+    var base = baseHttpBloqueada() ? '' : getApiBase();
+    var u = base + '/api/rom?url=' + encodeURIComponent(url);
+    return accessToken ? u + '&token=' + encodeURIComponent(accessToken) : u;
   }
 
   function playGame(sys, game) {
@@ -2427,7 +2466,7 @@
       source: 'url',
       url: game.url,
       name: game.fileName || game.name,
-      proxy: precisaProxy()
+      proxy: precisaProxy(game.url)
     });
     startPlayer();
   }
@@ -2444,7 +2483,10 @@
     var abs;
     try { abs = new URL(raw, location.href); } catch (e) { toast('Link inválido.', 'err'); return; }
     if (abs.protocol !== 'http:' && abs.protocol !== 'https:') { toast('Use um link http(s).', 'err'); return; }
-    var proxy = !!(el('rom-url-proxy') && el('rom-url-proxy').checked) || precisaProxy();
+    // O checkbox força o download pelo servidor; além dele, o proxy entra
+    // sozinho quando a página é HTTPS e o link é de outro host (ver
+    // precisaProxy).
+    var proxy = !!(el('rom-url-proxy') && el('rom-url-proxy').checked) || precisaProxy(abs.href);
     var parts = abs.pathname.split('/').filter(Boolean);
     var fileName = parts.length ? decodeURIComponent(parts[parts.length - 1]) : 'jogo.iso';
     // Cataloga o link na coleção do console (persistida) antes de abrir.
@@ -2476,8 +2518,13 @@
     }
     // Registrar antes de navegar: a página sai daqui e não dá para voltar atrás.
     markRecent(sys, { kind: 'external', key: 'url:' + game.url, url: game.url, name: game.fileName || game.name });
+    // A página própria (Play! .js) busca o disco por Range. Se a página é https
+    // e o jogo está fora do servidor dos jogos, ela cai no mesmo bloqueio da
+    // ROM (Mixed Content/CORS): passa o endereço já pelo proxy.
+    var alvo = toAbs(game.url);
+    if (precisaProxy(alvo)) alvo = romProxyUrl(alvo);
     location.href = page +
-      '?url=' + encodeURIComponent(toAbs(game.url)) +
+      '?url=' + encodeURIComponent(alvo) +
       '&name=' + encodeURIComponent(game.fileName || game.name || 'game.iso') +
       '&size=' + encodeURIComponent(game.size || 0);
   }
@@ -2694,9 +2741,7 @@
   function resolveSessionUrl(session) {
     if (session.source === 'url') {
       // Baixa pelo servidor (contorna CORS/COEP de hosts sem CORS) ou direto.
-      if (session.proxy) {
-        return Promise.resolve(getApiBase() + '/api/rom?url=' + encodeURIComponent(session.url));
-      }
+      if (session.proxy) return Promise.resolve(romProxyUrl(session.url));
       return Promise.resolve(toAbs(session.url));
     }
     var keys = session.keys || [];
@@ -2715,10 +2760,10 @@
     if (!bios) return Promise.resolve(null);
     if (bios.source === 'url') {
       var url = toAbs(bios.url);
-      var localBase = getApiBase();
-      var needsProxy = location.protocol === 'https:' && /^http:/i.test(localBase);
-      if (needsProxy) {
-        return Promise.resolve('/api/rom?url=' + encodeURIComponent(url));
+      // BIOS fora do servidor dos jogos numa página https: mesmo bloqueio da
+      // ROM (Mixed Content/CORS) — passa pelo proxy.
+      if (precisaProxy(url) || baseHttpBloqueada()) {
+        return Promise.resolve(romProxyUrl(url));
       }
       return Promise.resolve(url);
     }

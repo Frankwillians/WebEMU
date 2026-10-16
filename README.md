@@ -76,11 +76,12 @@ Do outro PC/celular na mesma rede: `http://SEU-IP-LOCAL:3000/play.html`
 
 Além do arquivo do aparelho, a página aceita um **link direto** para a ROM/ISO.
 Em cada console há o cartão *Jogar por link (URL)*: cole o endereço e clique em
-**▶ Jogar**. O download pode ser feito:
-
-- **pelo navegador** (caixa desmarcada) — direto, desde que o host permita CORS; ou
-- **pelo servidor** (caixa marcada, padrão) — passa por `/api/rom`, que contorna
-  bloqueios de CORS e suporta `Range`. O proxy recusa `localhost`/`169.254.*`.
+**▶ Jogar**. O download sai **direto pelo navegador** — e passa sozinho pelo
+proxy `/api/rom` (que contorna CORS/COEP e suporta `Range`) sempre que a página
+é **https** e o arquivo vem de **outro host**: o site publicado roda
+*cross-origin isolated* (`COEP: require-corp`), então link de terceiro (ou
+`http://`) só funciona pelo proxy. A caixa **Baixar pelo servidor desta página**
+força o proxy nos demais casos. O proxy recusa `localhost`/`169.254.*`.
 
 ```http
 GET /api/rom?url=https://exemplo.com/jogo.zip
@@ -546,7 +547,8 @@ que abre como **página própria** em `/ppsspp/`.
 > ⚠️ **É uma página própria, não um jogo da lista.** A página do PPSSPP Web **não**
 > recebe a ROM por parâmetro (`?url=`), então o botão só abre o emulador — você
 > escolhe o ISO **dentro dele**. Por isso ele fica como opção na visão do PSP, ao
-> lado dos jogos da biblioteca, e não na lista de jogos.
+> lado dos jogos da biblioteca, e **não** na lista de jogos — nem nos **recentes**
+> (abrir uma página não é jogar).
 
 ### Como habilitar (build publicado)
 

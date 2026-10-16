@@ -329,6 +329,12 @@ Mídia e inputs:    WebRTC (P2P) — o HOST emula e transmite; convidados só ma
   publicado. O backend (`covers.js`) tenta o nome exato no libretro-thumbnails e,
   se não achar, uma busca **aproximada** dentro daquele console; renomear refaz a
   capa. Se o nome ainda errar, `link.cover` guarda uma **URL manual** (o 🖼).
+- **Recentes ("Continue jogando"):** a grade do console mostra jogos do servidor
+  (selo *rede*), links salvos (selo *link*) e, por último, os recentes que não
+  vêm desses dois (`localStorage['ps1emu.recent']`, por console, teto de 12,
+  chaveado por `key`). **Abrir uma página alternativa não é jogar:** o PPSSPP Web
+  (`paginasAlternativas(sys)`) não vai para os recentes — a checagem em
+  `renderGamesList` também esconde o registro de versões antigas.
 - Ao mexer em UI, **valide o balanceamento de tags** (ver §11).
 
 ### Estilo geral
@@ -388,9 +394,17 @@ Mensagens do sinalizador (`src/backend/signaling.js`): `join`, `leave`, `offer`,
      índices analógicos seguem a tabela padrão do EmulatorJS (`16..23`).
 9. **Dois sinalizadores:** 🏠 LAN (`/signaling`) e 🌐 Online (`/api/ws`). O link de
    convite carrega `?room=`, `?server=` e `?ws=` para o convidado conectar sozinho.
-10. **Mixed Content:** em HTTPS (Vercel), ROMs vindas de HTTP local passam por
-    proxy (`/api/rom`). Use `precisaProxy()`
-    (`location.protocol === 'https:' && /^http:/i.test(getApiBase())`).
+10. **Mixed Content e COEP:** no site publicado (`https`) a página é
+    *cross-origin isolated* (`COEP: require-corp`), então ROM de **outro host**
+    falha por CORS — e de um host `http://` falha por Mixed Content. Nos dois
+    casos o EmulatorJS só mostra **"Erro de rede"**. O jogo por link passa pelo
+    proxy `/api/rom` sempre que `precisaProxy(url)` decide que ele vem de fora
+    (host diferente da página **e** do servidor dos jogos); `romProxyUrl(url)`
+    monta o endereço (base configurada — ou a própria origem da página quando a
+    base é `http://`, que não é alcançável de página https). O que é relativo
+    (`/roms/…`, o servidor configurado) continua **direto**: já responde com
+    CORS/CORP. O mesmo vale para a **BIOS** e para a página própria do PS2
+    (`/ps2/?url=`).
     A **capa** não cai nisso: ela é sempre pedida à origem da própria página
     (`/api/cover`), que resolve por nome + console sem tocar no backend local.
     Uma página HTTPS **não** consegue falar direto com API HTTP da LAN
@@ -545,7 +559,7 @@ resultado **verificável** (teste/validação) antes de considerar pronto.
 | 404 em `/api/systems/:id/games` ao abrir um console no site publicado | A função da Vercel só recebe um segmento; o front agora usa `health.library` e **não chama** rotas de disco quando `false` (mostra aviso + links). Para a biblioteca do PC, abra pelo backend (`?server=`, ver §6.3) |
 | Netplay sem TURN no site publicado | O ICE era `/api/netplay/ice` (multi-segmento) → 404. Agora é `/api/ice` (um segmento), servido pelo Express e pela função |
 | Capa bloqueada no site publicado | Não deveria: a capa é pedida à própria origem (`/api/cover`) e resolvida só por nome + console |
-| ROM por link bloqueada no Vercel | Mixed Content: use `/api/rom` (`precisaProxy()`) |
+| "Erro de rede" (EmulatorJS) ao abrir um jogo por **link** num console | A página `https` é cross-origin isolated: link de outro host (ou `http://`) é bloqueado por CORS/Mixed Content. `precisaProxy(url)` põe o jogo no proxy `/api/rom` (ver §9.10) |
 | Conectar do site HTTPS ao PC da LAN | **Mixed Content** (bloqueio do navegador, não é header). Abra `http://IP:3000/play.html`, use o **HTTPS** do PC (`npm run cert` → `https://IP:3443`, com `?server=`) ou um túnel HTTPS. O preflight **PNA** já é respondido |
 | Jogar com quem está em **outra rede** | **👥 Jogar em rede** no modo 🌐 Online (netplay); ou um túnel HTTPS que **você** sobe (`cloudflared`/`ngrok`/Tailscale) + `PUBLIC_URL` para levar a biblioteca. O túnel expõe o PC na internet — considere `ACCESS_TOKEN` |
 | "Conectado a https://web-emu.vercel.app" ao digitar um IP | `getApiBase` lendo a base com `JSON.parse` (gravada crua) — aponte com `?server=` (grava string crua); `normalizarBase` |
